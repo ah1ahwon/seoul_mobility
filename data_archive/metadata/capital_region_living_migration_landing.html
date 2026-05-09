@@ -1,0 +1,1305 @@
+
+
+
+
+
+ 	
+
+
+
+   
+
+     
+
+
+
+
+     
+
+<!doctype html>
+<html lang="ko">
+<head>
+	<!-- Global site tag (gtag.js) Google Analytics -->
+	<script async src="//www.googletagmanager.com/gtag/js?id=G-0T3XG23CN7"></script>
+	<script>
+		window.dataLayer = window.dataLayer || [];
+		function gtag(){dataLayer.push(arguments);}
+		gtag('js', new Date());
+		gtag('config', 'G-0T3XG23CN7');
+	</script>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="title" content="수도권 생활이동"/>
+    <meta name="keywords" content="열린데이터광장,생활이동,KT,생활이동 데이터,빅데이터 캠퍼스,통근,통학,데이터"/>
+    <meta name="description" content="KT에서 제공하는 생활이동 서비스를 모든 시민들에게 활용할수 있습니다."/>
+    <meta name="viewport" content="width=device-width"/>
+    <!-- meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no"/--><!-- ios때문에 이렇게 한다고하는데..w3s의 권장은 윗줄 -->   
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="수도권 생활이동"/>
+    <meta property="og:description" content="KT에서 제공하는 생활이동 서비스를 모든 시민들에게 활용할수 있습니다."/>
+    <meta property="og:image" content="https://data.seoul.go.kr:8580/resources/img/common/logo.png">
+    <meta property="og:url" content="https://data.seoul.go.kr">
+      
+    <link rel="stylesheet" href="/resources/css/ui.base.css?ver=230331"> <!-- css수정시 새로고침 안해도 되도록.. -->
+    <link rel="stylesheet" href="/resources/lib/owl.carousel.css">
+    
+ 	<!-- <link rel="shortcut icon" href="//data.seoul.go.kr/images/favicon.ico"  type="image/x-icon" /> --><!-- 20220701 icon 노출 -->
+	<link rel="icon" href="//data.seoul.go.kr/images/favicon.png" type="image/x-icon" /><!-- 20220622 -->
+	<link rel="canonical" href="https://data.seoul.go.kr">
+    
+	<link rel="stylesheet" href="/resources/css/ui.renewal.css?ver=20230330"> <!-- 20220615  -->
+	
+
+    <script src="/js/jQuery-2.1.4.min.js"></script>
+    
+	<script src="/resources/lib/owl.carousel.js"></script>
+	<script src="/resources/js/ui.global.js"></script>
+	<script src="/resources/js/ui.plugins.js"></script>
+	<!-- <script src="/resources/js/ui.common.js"></script>-->
+	<script src="/resources/js/ui.common-renewal.js"></script> <!-- 20220615  -->
+	
+	<script src="/js/jquery.modal.min.js"></script>
+	<link rel="stylesheet" href="/css/jquery.modal.min.css">
+	
+    <script src="/js/jquery-ui.min.js"></script> <!-- 2017.11.02 스크롤관련 js 추가 -->
+	<script src="/js/jquery.jb.acescroll.js"></script> <!-- 2017.11.02 스크롤관련 js 추가 -->
+    <script src="/js/jquery.mousewheel.js"></script> <!-- 2017.11.02 스크롤관련 js 추가 -->
+	<script src="/js/jquery.DB_navi3DSwap.min.js"></script>
+	<link rel="stylesheet" href="/css/animate.min.css" />  <!-- 2017.11.11 추가 -->
+	<!-- jQuery 1.7+, IE 7+ -->
+	<script src="/js/jquery.event.drag-1.5.1.min.js"></script>
+	<script src="/js/jquery.touchSlider.js"></script>	
+	<title>서울 열린데이터광장</title>
+	
+	
+	<script>
+	var console = window.console || { log:function(){} };
+
+	function chgTitle(main, sub, bottom) {
+	    var title = "";
+	    var top = "서울열린데이터광장";
+	    
+	    if(top == main) {
+	        $('title').text(main);
+	        return;
+	    }
+	    
+	    if(bottom != null && bottom != '') { title += bottom +'> '; }
+	    if(sub != null && sub != '') { title += sub + '> ' ; }
+	    if(main != null && main != '') { title += main; }
+	    title += ' | ' + top;
+	    
+	    $('title').text(title);
+	}
+	
+	function naviSet(naviSetMenu, naviSetSubtTtle){
+		$('#naviSet').text(naviSetMenu);
+		$('#subTitle').text(naviSetSubtTtle);
+		$('#menuName').text(naviSetMenu);
+	}
+	
+	//20200910 웹접근성관련 ie의 본문바로가기 실행후 메뉴로 가는 버그때문에 추가
+	function skipMenu(sectionStr) {
+		var loc = "#"+sectionStr;
+		$(loc).prop("tabindex","0");
+		document.location.href = loc;
+		
+		$(loc).keyup(function() {
+			$(loc).removeAttr("tabindex");
+		});
+	}
+	
+	//20220622 main_renewal관련
+	$(document).ready(function(){
+		if(window.location.href.indexOf('/index.do') < 0 && window.location.pathname != '/') {
+			$("body").attr("class", "web-renewal");
+		}
+	});
+	
+	</script>
+		
+		<!-- 수정  -->
+
+<!-- 수정  -->
+
+
+
+ 
+
+
+
+<!-- 수정  -->
+<style>
+.content-move .list-datadownload li {height: 260px;}
+.datadownload a{display:block; width:100%; height:22px; margin-top: 3px;}
+.datadownload span:after{
+	content:""; display:block; float:right; width:25px; height:25px; background:url(../../resources/img/common/ico_a.png) no-repeat -25px 25px;
+}
+.link-group li{
+	height:255px;
+}
+</style>
+
+<script type="text/javascript">
+var nowDate = new Date();
+var today = new Date();
+if(nowDate.getDate()>=26){
+	nowDate.setMonth(today.getMonth());
+}else{
+	nowDate.setMonth(today.getMonth()-1);
+}
+var twoYear = "";
+var twoMonth = "";
+
+if(nowDate.getMonth()=="0"){
+	twoYear = nowDate.getFullYear()-1;
+	twoMonth = "12";
+}else{
+	twoYear = nowDate.getFullYear();
+	twoMonth = (nowDate.getMonth()).toString().padStart(2,'0');
+}
+
+ $(document).ready(function() {
+	 $("span#popDate").text("("+twoYear+". "+twoMonth+"기준)");
+	 
+    var naviSetTitle;
+    var naviSetSubtTtle = "수도권 생활이동";
+    var naviSetMenu = "서울빅데이터";
+    // 네비(메뉴명) 세팅
+    naviSet(naviSetMenu, naviSetSubtTtle); 
+    // title 설정
+    chgTitle(naviSetSubtTtle, naviSetMenu);   
+    
+}); 
+
+
+function downloadFile(infSeq,seqNo) {
+	
+	$.ajax({
+        url : "/dataVisual/seoul/getSeoulLivingDownloadYN.do",
+        type : "post",
+        dataType : "json",
+        data : {"infSeq" : infSeq, "seq" : seqNo},
+        success : function(data, status, jqXHR) {
+        	if (data != null && data.result != undefined) {       		        		      			
+        		document.frmFile.infSeq.value = infSeq;	
+        		document.frmFile.seq.value = seqNo;
+        		document.frmFile.action = "//datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?&useCache=false";
+        		document.frmFile.target = "_self";
+        		document.frmFile.method = "post";
+        		document.frmFile.submit();
+        	} else {
+        		alert("작업중입니다.");	
+        	} 	
+        }, 
+        error :  function(jqXHR, textStatus, errorThrown) { 
+            
+        }
+    });
+}
+
+function kt() {	
+	if(!$plugins.browser.mobile) {
+		/* window.open('https://data.seoul.go.kr/bsp/wgs/theme/detail/1?utm_source=opendataplaza&utm_medium=mobility&utm_campaign=opendataplaza', "", ""); */
+		//window.open('https://data.seoul.go.kr/bsp/wgs/theme/detail/1.do?utm_source=opendataplaza&utm_medium=mobility&utm_campaign=opendataplaza', "", "");
+		
+//		location.href = "/goUrlLog.do?toUrl=https://data.seoul.go.kr/bsp/wgs/theme/detail/1.do?utm_source=opendataplaza&utm_medium=mobility&utm_campaign=opendataplaza";
+		//window.open('/goUrlLog.do?toUrl=https://data.seoul.go.kr/bsp/wgs/theme/detail/1.do?utm_source=opendataplaza&utm_medium=mobility&utm_campaign=opendataplaza',"","");
+		goUrl('https://data.seoul.go.kr/bsp/wgs/theme/detail/1.do?utm_source=opendataplaza&utm_medium=mobility&utm_campaign=opendataplaza');
+	} else {
+		alert("PC에서 이용해 주시기 바랍니다.");
+	}
+}
+
+</script>
+</head>
+
+<body>	
+<form name="frmFile" id="frmFile" >    
+	<input type="hidden" name="infId" value="DOWNLOAD"/>
+	<input type="hidden" name="infSeq"/>
+	<input type="hidden" name="seqNo"/>
+	<input type="hidden" name="seq"/>
+</form>
+
+	<div class="base-skip" id="baseSkip"></div>
+
+	<div class="base-layer" id="baseLayer"></div>
+    
+    <div class="base-wrap" id="baseWrap">
+    
+        <!--탑 해더 시작-->
+        <header class="base-header" id="baseHeader">
+			
+<script src="//www.seoul.go.kr/seoulgnb/gnb.js"></script>
+<script>
+function logout(){ 
+	//location.href = "/sso/logout.jsp?nextPage="+encodeURIComponent(location.href);
+	
+	//통계소식, 게시판 상세에서 로그인시 오류 발생 20200213 add
+	var ourl = location.href;
+	//if( ourl.includes("boardView.do") || ourl.includes("inquireView.do") || ourl.includes("galleryView.do") || ourl.includes("statView.do") ) {	//익스에서 먹지않음.
+	if( ourl.indexOf("boardView.do")>=0 || ourl.indexOf("inquireView.do")>=0 || ourl.indexOf("galleryView.do")>=0 || ourl.indexOf("statView.do")>=0 ) {
+		if( ourl.indexOf("?") >= 0) {
+			ourl = ourl.substring(0, ourl.indexOf("?"));			
+		} 
+		ourl = ourl.replace("View", "List");
+	}
+	location.href = "/sso/logout.jsp?nextPage="+encodeURIComponent(ourl);
+}
+
+function login(){
+	//location.href = "/sso/login.jsp?nextPage="+encodeURIComponent(location.href);
+	
+	//통계소식, 게시판 상세에서 로그인시 오류 발생 20200213 add
+	var ourl = location.href;
+	if( ourl.indexOf("boardView.do")>=0 || ourl.indexOf("inquireView.do")>=0 || ourl.indexOf("galleryView.do")>=0 || ourl.indexOf("statView.do")>=0 ) {
+		if( ourl.indexOf("?") >= 0) {
+			ourl = ourl.substring(0, ourl.indexOf("?"));			
+		} 
+		ourl = ourl.replace("View", "List");
+	}
+	location.href = "/sso/login.jsp?nextPage="+encodeURIComponent(ourl);
+}
+function login2(){
+	
+	alert('서울시 통합회원 로그인 홈페이지로\n이동하여 로그인 합니다.');
+	//통계소식, 게시판 상세에서 로그인시 오류 발생 20200213 add
+	var ourl = location.href;
+	if( ourl.indexOf("boardView.do")>=0 || ourl.indexOf("inquireView.do")>=0 || ourl.indexOf("galleryView.do")>=0 || ourl.indexOf("statView.do")>=0 ) {
+		if( ourl.indexOf("?") >= 0) {
+			ourl = ourl.substring(0, ourl.indexOf("?"));			
+		} 
+		ourl = ourl.replace("View", "List");
+	}
+	
+	location.href = "/sso/login2.jsp?nextPage="+encodeURIComponent(ourl);
+}
+
+//GNB 로딩 스크립트
+window.onload = function() {
+	var widthValue = "1000px";
+	
+	if(window.location.href.indexOf('/index.do') > 0 || window.location.pathname == '/') {
+		widthValue = "1200px";
+	}
+	var myCss = {
+		root: {
+			backgroundColor: 'white'
+		},
+		holder: {
+			maxWidth: widthValue
+		},
+		menu: {
+			backgroundColor: 'white'
+		}
+	};
+	Yjs.Gnb.init('G135', 'seoul-common-gnb', myCss);
+}
+
+$(document).ready(function() {
+
+});
+
+function showModal(id){
+	$("#"+id).modal('show');
+	var loc = "#"+id;
+	$(loc).prop("tabindex","0");
+	document.location.href = loc;
+
+// 	$(loc).keyup(function(){
+// 		$(loc).removeAttr("tabindex");
+// 	});
+}
+
+function hideModal(){
+	$(".blocker").trigger("click");
+	var loc = "#sitemap_p";
+	$(loc).prop("tabindex","0");
+	document.location.href = loc;
+
+//	$(loc).keyup(function(){
+//		$(loc).removeAttr("tabindex");
+//	});
+}
+
+function goUrl(param){
+	$.ajax({
+		type:"post",
+		url:"/goUrlLog.do",
+		dataType:"json",
+		data : {toUrl : param},
+		success:function(data){			
+		},
+		error      : function(data) {
+		}
+	});
+	
+	window.open(param, "_blank");
+}
+
+function searchMSend(){
+	datasetMVO.submit();
+}
+
+function fn_memberJoin(){
+	var openNewWindow = window.open("");
+	openNewWindow.location.href = "https://www.seoul.go.kr/member/join/regist01.do?SITE_GB=GB071";
+}
+
+//20210202 add 
+function goLinkedData() {
+	var openNewWindow = window.open("");
+	openNewWindow.location.href = "http://lod.seoul.go.kr/home/";
+}
+
+function movePage(url, popYn){
+	if(popYn == "Y") {
+		window.open(url,"_blank","")
+	} else {
+		document.location.href=url;
+	}
+}
+function confirmYN(){
+	var userId   = '';
+	if(userId==""){
+		if(confirm("참가신청/확인은 서울시 통합회원 로그인이 필요한 서비스입니다.\n이동하시겠습니까?\n(참가신청/확인은 PC 버전 브라우저에서만 가능합니다.)")){
+			location.href="/together/cpthb/cpthbWrite_ss.do";
+		}
+	}else{
+		location.href="/together/cpthb/cpthbWrite_ss.do";
+	}
+}
+</script>
+    
+        	
+	
+<!--탑 해더 시작-->
+<!--상단메뉴1 서울시 공통 GNB-->
+<div class="header-toolbar" style="box-sizing: content-box;">
+    <div class="header-toolbar-wrap" style="padding: 0;">
+        <div id='seoul-common-gnb'></div>
+    </div>
+</div>
+<!--//상단메뉴1 서울시 공통 GNB--> 
+	
+    
+<!-- 상단메뉴2시작 -->
+<div class="header-wrap">
+    <h2 class="header-logo">
+        <a href="/"><img src="/resources/img/common/logo.png" alt="서울열린데이터광장"></a>
+   </h2>
+   <button type="button" class="btn-open only-m" onclick="$plugins.common.menuOpen();"><span class="hide">메뉴 열기</span></button>
+   
+   <nav class="nav-main" id="baseNav">
+       <ul class="nav-main-wrap">
+           <li class="nav-main-1 n1">
+               <a class="nav-btn-1" href="/dataList/datasetList.do?datasetKind=1&searchFlag=M"><i>공공데이터</i></a>
+               <div class="nav-sub">
+                   <div class="nav-sub-wrap">
+                       <h2>공공데이터</h2>
+                       <ul>
+                           <li><a href="/dataList/datasetList.do?datasetKind=1&searchFlag=M">공공데이터</a></li><!-- 20220520 edit -->
+                           <li><a href="/dataList/literacyList.do">인기그룹데이터</a></li>
+                           <li><a href="/datasetRanking/new.do">새로 개방한 데이터</a></li>
+                           <li><a href="/datasetRanking/popular.do">인기데이터</a></li>
+                           <li><a href="//lod.seoul.go.kr/home/" onclick="javascript:goLinkedData();return false;">Linked Open Data</a></li>
+                           <li><a href="/link/districtList.do">자치구 열린데이터</a></li>
+<!--                            <li><a href="/goUrlLog.do?toUrl=https://data.seoul.go.kr/bsp/wgs/intro/datamap.do?utm_source=opendataplaza&utm_medium=gnbDataMap&utm_campaign=opendataplaza" target="_blank" title="새창열림">데이터 맵</a></li> -->
+							<li><a href="#" onclick="javascript:goUrl('https://data.seoul.go.kr/bsp/wgs/intro/datamap.do?utm_source=opendataplaza&utm_medium=gnbDataMap&utm_campaign=opendataplaza');" title="새창열림">데이터 맵</a></li>
+                           <!-- <li><a href="/together/bbs/bbsList.do">공공데이터 제공신청</a></li> -->
+                       </ul>
+                   </div>
+               </div>
+           </li>
+           <li class="nav-main-1 n2">
+               <a class="nav-btn-1" href="/dataList/datasetList.do?datasetKind=2&searchFlag=M"><i>통계</i></a><!-- 20220520 edit -->
+               <div class="nav-sub">
+                   <div class="nav-sub-wrap">
+                       <h2>통계</h2>
+                       <ul>
+                           <li><a href="/dataList/datasetList.do?datasetKind=2&searchFlag=M">통계표</a>
+                           <li><a href="/dataService/boardList.do">통계목록</a></li>
+                           <li><a href="/dataService/statList.do">통계소식</a></li>
+                           <li><a href="/dataVisual/seoul/seoulList.do">서울의하루</a>
+                           <li><a href="/together/statbook/statbookList.do">서울통계간행물</a></li>
+                           <li><a href="/dataVisual/seoul/bestList.do">서울의 인기통계</a></li>
+                           <li><a href="/dataVisual/seoul/seoul100List.do">서울의 100대통계</a></li>
+                           <li><a href="https://stat.eseoul.go.kr/stat/sip/sts/map/statsMap.do" target="_blank">한눈에 보는 사업체</a></li>
+                       </ul>
+                   </div>
+               </div>
+           </li>
+           <li class="nav-main-1 n3">
+               <a class="nav-btn-1" href="/dataVisual/seoul/seoulLivingPopulation.do"><i>서울빅데이터</i></a>
+               <div class="nav-sub">
+                   <div class="nav-sub-wrap">
+                       <h2>서울빅데이터</h2>
+                       <ul>
+                           <li><a href="/dataVisual/seoul/seoulLivingPopulation.do">서울 생활인구</a></li>
+                           <li><a href="/dataVisual/seoul/capitalRegionLivingMigration.do">수도권 생활이동</a></li>
+		                   <li><a href="/dataVisual/seoul/seoulLiving.do">서울 시민생활 데이터</a></li>
+		                   <li><a href="/dataVisual/seoul/guide.do">서울 실시간 도시데이터</a></li>
+		                   <li><a href="/dataVisual/seoul/SeoulConsumerLogistics.do">서울 생활물류</a></li>
+                           <li><a href="/etc/aiEduData.do">AI학습데이터</a></li>
+<!--                            <li><a href="/goUrlLog.do?toUrl=https://data.seoul.go.kr/bsp/wgs/index.do?utm_source=opendataplaza&utm_medium=gnbSeoulDataHub&utm_campaign=opendataplaza" target="_blank" title="새창열림">서울 데이터 허브</a></li> -->
+                           <li><a href="#" onclick="javascript:goUrl('https://data.seoul.go.kr/bsp/wgs/index.do?utm_source=opendataplaza&utm_medium=gnbSeoulDataHub&utm_campaign=opendataplaza');" title="새창열림">서울 데이터 허브</a></li>
+                       </ul>
+                   </div>
+               </div>
+           </li>
+           
+			<li class="nav-main-1 n4">
+				<a class="nav-btn-1" href="/together/notice/datasetNoticeList.do"><i>소식&amp;참여</i></a>
+				<div class="nav-sub">
+					<div class="nav-sub-wrap">
+						<h2>소식&amp;참여</h2>
+						<ul>
+							<li><a href="/together/notice/datasetNoticeList.do">데이터소식</a></li>
+							<li><a href="/together/notice/boardList.do">공지사항</a></li>
+							<li><a href="/together/notice/faqList.do">FAQ</a></li>
+							<li><a href="/together/notice/inquireList.do">문의하기</a></li>
+							<li><a href="/dataVisual/gallery/galleryList.do">활용사례(갤러리)</a></li>
+							<li><a href="/together/bbs/bbsList.do">데이터 수요창구</a></li>
+							<li><a href="/together/newsletter/newsletter.do">열광 뉴스레터</a></li>
+							<li><a href="/together/notice/fellowshipList.do">서울 데이터 펠로우십</a></li>
+							<li><a href="/together/cpthb/cpthbDetail.do">경진대회</a></li>
+						</ul>
+					</div>
+				</div>
+			</li>
+        			  
+			<li class="nav-main-1 n5">
+			<a class="nav-btn-1" href="/etc/openInfo.do"><i>이용안내</i></a>
+				<div class="nav-sub">
+					<div class="nav-sub-wrap">
+						<h2>이용안내</h2>
+						<ul>
+							<li><a href="/etc/openInfo.do">열광소개</a></li>
+							<li><a href="/together/guide/useGuide.do">Open API 소개</a></li>
+							<li><a href="/etc/offerReqst.do">공공데이터 제공신청</a></li>
+						</ul>
+					</div>
+				</div>
+			</li>
+
+           <!-- AI학습데이터 추가 -->
+       </ul>
+   </nav>
+   <div class="header-lnb">
+   	
+		
+		
+			<!-- <a href="#" onclick="javascript:login()">로그인 </a> -->
+			<a href="#" onclick="javascript:login2()">로그인</a>
+			<a href="https://www.seoul.go.kr/member/join/regist01.do?SITE_GB=GB071" target="_blank"  title="새창열림">회원가입</a>
+		
+	
+       		<a href="#" onclick="javascript:showModal('sitemap');">사이트맵 </a>
+    </div>
+    
+    <section class="menu-wrap only-m" id="uiMenu">
+        <h2 class="hide">서울데이터광장 menu</h2><!-- 20201104 웹표준관련 -->
+        <button type="button" class="btn-close" onclick="$plugins.common.menuClose();"><span class="hide">메뉴 닫기</span></button>
+        <div class="menu-wrap-head">
+        
+        
+			
+			
+				 <!-- 로그인 전 -->
+		            <div class="state-login">
+		                <button type="button" onclick="login2();">
+		                    <img src="/resources/img/common/btn_login_renewal.png" alt="로그인">
+		                    	로그인
+		                </button>
+		                <button type="button" onclick="fn_memberJoin();">
+		                    <img src="/resources/img/common/btn_join_renewal.png" alt="회원가입">
+		                    	회원가입
+		                </button>
+		            </div>
+			
+		
+            
+        <form id="datasetMVO" name="datasetMVO" method="post" action="/dataList/datasetList.do">
+        	<input type="hidden" name="pageIndex"  id="pageIndex1" value="1" />
+			<input type="hidden" name="sortColBy" id="sortColBy1" value="R"/>
+            <div class="base-search">
+				<div class="base-search-wrap">
+					<label for="searchMKeyword"></label>
+                    <input type="text" name="searchValue" id="searchMKeyword" class="inp-base" placeholder="데이터를 입력해주세요">
+                    <button type="button" onclick="searchMSend();">검색</button>
+                    <label for="baseSearch1"></label>
+                    <input type="checkbox" id="baseSearch1">
+                </div>
+			</div>
+		</form>
+        </div>
+        <nav class="menu-wrap-body">
+
+            <ul class="dep-1-wrap">
+                <li class="dep-1 selected">
+                    <button type="button" class="dep-1-btn">공공데이터</button>
+                    <div class="dep-2-wrap">
+                        <ul>
+                           <li class="dep-2"><a href="/dataList/datasetList.do?datasetKind=1&searchFlag=M" class="dep-2-btn">공공데이터</a></li><!-- 20220520 edit -->
+                           <li class="dep-2"><a href="/dataList/literacyList.do" class="dep-2-btn">인기그룹데이터</a></li>
+                           <li class="dep-2"><a href="/datasetRanking/new.do" class="dep-2-btn">새로 개방한 데이터</a></li>
+                           <li class="dep-2"><a href="/datasetRanking/popular.do" class="dep-2-btn">인기데이터</a></li>
+                           <li class="dep-2"><a href="//lod.seoul.go.kr/home/" onclick="javascript:goLinkedData();return false;" class="dep-2-btn">Linked Open Data</a></li>
+                           <li class="dep-2"><a href="/link/districtList.do" class="dep-2-btn">자치구 열린데이터</a></li>
+<!--                            <li class="dep-2"><a href="/goUrlLog.do?toUrl=https://data.seoul.go.kr/bsp/wgs/intro/datamap.do?utm_source=opendataplaza&utm_medium=gnbDataMap&utm_campaign=opendataplaza" target="_blank" class="dep-2-btn" title="새창열림">데이터 맵</a></li> -->
+                           <li class="dep-2"><a href="#" class="dep-2-btn" onclick="javascript:goUrl('https://data.seoul.go.kr/bsp/wgs/intro/datamap.do?utm_source=opendataplaza&utm_medium=gnbDataMap&utm_campaign=opendataplaza');" title="새창열림">데이터 맵</a></li>
+                           <!-- <li class="dep-2"><a href="/together/bbs/bbsList.do" class="dep-2-btn">공공데이터 제공신청</a></li> -->
+                        </ul>
+                    </div>
+                </li> 
+                <li class="dep-1">
+                    <button type="button" class="dep-1-btn">통계</button>
+                    <div class="dep-2-wrap">
+                        <ul>
+							<li class="dep-2"><a href="/dataList/datasetList.do?datasetKind=2&searchFlag=M" class="dep-2-btn">통계표</a></li>
+							<li class="dep-2"><a href="/dataService/boardList.do" class="dep-2-btn">통계목록</a></li>
+							<li class="dep-2"><a href="/dataService/statList.do" class="dep-2-btn">통계분석</a></li>
+							<li class="dep-2"><a href="/dataVisual/seoul/seoulList.do" class="dep-2-btn">서울의하루</a></li>
+							<li class="dep-2"><a href="/together/statbook/statbookList.do" class="dep-2-btn">서울통계간행물</a></li>
+							<li class="dep-2"><a href="/dataVisual/seoul/bestList.do" class="dep-2-btn">서울의 인기통계</a></li>
+							<li class="dep-2"><a href="/dataVisual/seoul/seoul100List.do" class="dep-2-btn">서울의 100대통계</a></li>
+							<li class="dep-2"><a href="https://stat.eseoul.go.kr/stat/sip/sts/map/statsMap.do" target="_blank" class="dep-2-btn">한눈에 보는 사업체</a></li>
+                        </ul>
+                    </div>
+                </li>
+
+				<li class="dep-1">
+					<button type="button" class="dep-1-btn">서울빅데이터</button>
+					<div class="dep-2-wrap">
+						<ul>
+							<li class="dep-2"><a href="/dataVisual/seoul/seoulLivingPopulation.do" class="dep-2-btn">서울 생활인구</a></li>
+							<li class="dep-2"><a href="/dataVisual/seoul/capitalRegionLivingMigration.do" class="dep-2-btn">수도권 생활이동</a></li>
+							<li class="dep-2"><a href="/dataVisual/seoul/seoulLiving.do" class="dep-2-btn">서울 시민생활 데이터</a></li>
+							<li class="dep-2"><a href="/dataVisual/seoul/guide.do" class="dep-2-btn">서울 실시간 도시데이터</a></li>
+							<li class="dep-2"><a href="/dataVisual/seoul/SeoulConsumerLogistics.do" class="dep-2-btn">서울 생활물류</a></li>
+							<li class="dep-2"><a href="/etc/aiEduData.do" class="dep-2-btn">AI학습데이터</a></li>
+<!-- 							<li class="dep-2"><a href="/goUrlLog.do?toUrl=https://data.seoul.go.kr/bsp/wgs/index.do?utm_source=opendataplaza&utm_medium=gnbSeoulDataHub&utm_campaign=opendataplaza" target="_blank" class="dep-2-btn" title="새창열림">서울 데이터 허브</a></li> -->
+							<li class="dep-2"><a href="#" class="dep-2-btn" onclick="javascript:goUrl('https://data.seoul.go.kr/bsp/wgs/index.do?utm_source=opendataplaza&utm_medium=gnbSeoulDataHub&utm_campaign=opendataplaza');" title="새창열림">서울 데이터 허브</a></li>
+						</ul>
+					</div>
+				</li> 
+				
+				<li class="dep-1">
+					<button type="button" class="dep-1-btn">소식&amp;참여</button>
+					<div class="dep-2-wrap">
+						<ul>
+							<li class="dep-2"><a href="/together/notice/datasetNoticeList.do" class="dep-2-btn">데이터소식</a></li>
+							<li class="dep-2"><a href="/together/notice/boardList.do" class="dep-2-btn">공지사항</a></li>
+							<li class="dep-2"><a href="/together/notice/faqList.do" class="dep-2-btn">FAQ</a></li>
+							<li class="dep-2"><a href="/together/notice/inquireList.do" class="dep-2-btn">문의하기</a></li>
+							<li class="dep-2"><a href="/dataVisual/gallery/galleryList.do" class="dep-2-btn">활용사례(갤러리)</a></li>
+							<li class="dep-2"><a href="/together/bbs/bbsList.do" class="dep-2-btn">데이터 수요창구</a></li>
+							<li class="dep-2"><a href="/together/newsletter/newsletter.do" class="dep-2-btn">열광 뉴스레터</a></li>
+							<li class="dep-2"><a href="/together/notice/fellowshipList.do" class="dep-2-btn">서울 데이터 펠로우십</a></li>
+							<li class="dep-2"><a href="/together/cpthb/cpthbDetail.do" class="dep-2-btn">경진대회</a></li>
+						</ul>
+					</div>
+				</li> 
+				
+				<li class="dep-1">
+					<button type="button" class="dep-1-btn">이용안내</button>
+					<div class="dep-2-wrap">
+						<ul>
+							<li class="dep-2"><a href="/etc/openInfo.do" class="dep-2-btn">열린소개</a></li>
+							<li class="dep-2"><a href="/together/guide/useGuide.do" class="dep-2-btn">Open API 소개</a></li>
+							<li class="dep-2"><a href="https://www.data.go.kr/tcs/dor/insertDataOfferReqstProcssView.do" target="blank" class="dep-2-btn">공공데이터 제공신청</a></li>
+						</ul>
+					</div>
+				</li> 
+                <!-- AI학습데이터 추가 -->
+            </ul>
+        </nav>
+    </section>
+</div>
+<!-- 상단메뉴2끝 -->
+<div class="menu-dim"></div>
+<!-- 탑 해더 끝-->
+	
+		</header>
+        <!-- 탑 해더 끝-->
+        
+        <section class="base-body" id="baseBody">
+        	
+        	<div class="base-tit">
+				<div class="base-tit-wrap">
+					<h1 class="tit-l">수도권 생활이동</h1>
+					<div class="breadcrumbs">
+						<ul>
+							<li><span>Home</span></li>
+							<li><span>서울빅데이터</span></li>
+							<li><span>수도권 생활이동</span></li>
+						</ul>
+					</div>
+
+					<button type="button" class="btn-submenu only-m ui-drop" id="uiMeunSub"><span class="hide">서브메뉴 열기</span></button>
+					<div class="ui-drop-wrap menusub-area only-m ">
+						<section class="ui-drop-pnl" data-id="uiMeunSub">
+							<div>
+		                       <ul>
+		                           <li><a href="/dataVisual/seoul/seoulLivingPopulation.do">서울 생활인구</a></li>
+		                           <li><a href="/dataVisual/seoul/capitalRegionLivingMigration.do">수도권 생활이동</a></li>
+		                           <li><a href="/dataVisual/seoul/seoulLiving.do">서울 시민생활 데이터</a></li>
+		                           <li><a href="/dataVisual/seoul/guide.do">서울 실시간 도시데이터</a></li>
+		                           <li><a href="/etc/aiEduData.do">AI학습데이터</a></li>
+		                       </ul>
+							</div>
+						</section>
+					</div>
+				</div>
+			</div>
+			<!-- 202108 HTML -->
+			<div class="wrap-b">
+				<div class="wrap-cont">
+					<div class="content-move">
+						<h2 class="hue-p2 tit-m">수도권 생활이동 이란?</h2>
+						<div class="bar-top dark">수도권이 출발지이거나 도착지인 모든 이동으로, 출근/등교/귀가/쇼핑/병원/관광/기타 총 7개의 이동 목적에 따른 이동</div>
+					</div>
+					<div class="content-move">
+						<h2 class="hue-p2 tit-m">수도권 생활이동 현황
+							<span class="standard-day" id="popDate">(2024. 06 기준)</span>
+						</h2>
+						<!--div class="map-box">
+							<div class="map-item">
+								<dl>
+									<dt>수도권이 도착인 이동(유입)</dt>
+									<dd id="inDay">15,644,789</dd>
+									<dt>수도권이 출발인 이동(유출)</dt>
+									<dd id="outDay">15,637,526</dd>
+								</dl>
+							</div>
+							<div class="map-item">
+								<img src="/resources/img/content/captial1.jpg" alt="" title="수도권이 출발도착인 이동관련 이미지">
+							</div>
+						</div-->
+						<div class="preview">
+							<img src="/resources/img/content/captial1.jpg" alt="" title="수도권이 출발도착인 이동관련 이미지">
+						</div>
+					</div>
+					
+					<div class="content-move">
+						<div class="align-r">
+							<a href="/dataVisual/seoul/seoulLivingMigration.do" class="btn-base bgc-p5"><span>기존 서울 생활이동 데이터 보기</span></a>
+							&nbsp;<a href="javascript:kt();" class="btn-base bgc-p5"><span>수도권 생활이동 시각화 바로가기</span></a>
+						</div>
+						<div class="preview">
+							<img src="/resources/img/content/img_move-preview.jpg" alt="KT생활이동 예시화면">
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="wrap-a">
+				<div class="wrap-cont">
+					 <div class="st0101_3 content-move">
+						<h2 class="hue-p2 tit-m">데이터 내려받기</h2>
+						<ul class="list-datadownload">
+							<li class="n1" style="height: 290px;">
+								<div class="list-datadownload-img"><strong>수도권 생활이동 (성 연령별, 도착지 기준)</strong></div>
+								<div class="list-datadownload-item">
+									<a href="/dataList/OA-22298/F/1/datasetView.do" title="수도권 생활이동 목적별 (성 연령별, 도착지 기준)-내국인 데이터셋 이동"><span>· 성 연령별, 도착지 기준(내국인, 목적별)</span></a>
+									<a href="/dataList/OA-22378/F/1/datasetView.do" title="수도권 생활이동 목적별(성 연령별, 도착지 기준)-외국인 데이터셋 이동"><span>· 성 연령별, 도착지 기준(외국인, 목적별)</span></a>
+									<a href="/dataList/OA-22655/F/1/datasetView.do" title="수도권 생활이동 수단별 (성 연령별, 도착지 기준)-내국인 데이터셋 이동"><span>· 성 연령별, 도착지 기준(내국인, 수단별)</span></a>
+									<a href="/dataList/OA-22656/F/1/datasetView.do" title="수도권 생활이동 수단별(성 연령별, 도착지 기준)-외국인 데이터셋 이동"><span>· 성 연령별, 도착지 기준(외국인, 수단별)</span></a>
+								</div>
+							</li>
+							<li class="n2" style="height: 290px;">
+								<div class="list-datadownload-img"><strong>수도권 생활이동 (연령별, 출발-도착지 기준)</strong></div>
+								<div class="list-datadownload-item">
+									<a href="/dataList/OA-22299/F/1/datasetView.do" title="수도권 생활이동 목적별(연령별, 출발-도착지 기준)-내국인 데이터셋 이동"><span>· 연령별, 출발-도착지 기준(내국인, 목적별)</span></a>
+									<a href="/dataList/OA-22379/F/1/datasetView.do" title="수도권 생활이동 목적별(연령별, 출발-도착지 기준)-외국인 데이터셋 이동"><span>· 연령별, 출발-도착지 기준(외국인, 목적별)</span></a>
+									<a href="/dataList/OA-22658/F/1/datasetView.do" title="수도권 생활이동 수단별(연령별, 출발-도착지 기준)-내국인 데이터셋 이동"><span>· 연령별, 출발-도착지 기준(내국인, 수단별)</span></a>
+									<a href="/dataList/OA-22659/F/1/datasetView.do" title="수도권 생활이동 수단별(연령별, 출발-도착지 기준)-외국인 데이터셋 이동"><span>· 연령별, 출발-도착지 기준(외국인, 수단별)</span></a>
+								</div>
+							</li>
+							<li class="n3" style="height: 290px;">
+								<!--<div class="list-datadownload-img" style="cursor:pointer;" onclick="location.href='https://data.seoul.go.kr/dataList/OA-22300/F/1/datasetView.do?tab=F'"><strong>수도권 생활이동 (출발-도착지 기준)</strong></div>-->
+								<div class="list-datadownload-img"><strong>수도권 생활이동 (출발-도착지 기준)</strong></div>
+								<div class="list-datadownload-item">
+									<a href="/dataList/OA-22300/F/1/datasetView.do" title="수도권 생활이동 목적별(출발-도착지 기준)-내국인 데이터셋 이동"><span>· 출발-도착지 기준(목적별)</span></a>
+									<a href="/dataList/OA-22657/F/1/datasetView.do" title="수도권 생활이동 수단별(출발-도착지 기준)-내국인 데이터셋 이동"><span>· 출발-도착지 기준(수단별)</span></a>
+								</div>
+							</li>
+						</ul>
+						<dl class="bul-hyphen">
+							<dt>유의사항</dt>
+							<dd>수도권 생활이동은 통계적 방법에 의해 추정된 데이터로 특정 지역이나 시점에 따라 실제와 다를 수 있습니다.</dd>
+							<dd>출·도착지가 서울 지역은 행정동으로, 그 외 지역은 시·도 또는 시·군·구로 표시됩니다.</dd>
+						</dl>
+						<div class="link-group">
+							<ul>
+								<li>
+									<a href="/together/notice/inquireList.do">
+										<img src="/resources/img/content/st01_bg3_5.png" alt="" title="문의하기 (Q&A) 이동">
+										<b>문의하기 (Q&A)</b><br />
+										<span>문의사항은 문의하기를 이용하세요.</span>
+									</a>
+								</li>
+								<li>
+									<img src="/resources/img/content/st01_bg3_6.png" alt="수도권생활이동메뉴얼 내려받기" title="수도권생활이동메뉴얼 내려받기">
+									<a href="javascript:downloadFile(4,'17');"><b>수도권생활이동 메뉴얼 </b><img src="/resources/img/guide/download_gray.png" style="width:17px;height:16px;" alt="수도권생활이동 메뉴얼"></a><br>
+									<a href="javascript:downloadFile(4,'18');"><b>전국 행정동 코드정보 </b><img src="/resources/img/guide/download_gray.png" style="width:17px;height:16px;" alt="전국 행정동 코드정보"></a><br>
+									<a href="javascript:downloadFile(4,'19');"><b>수도권 생활이동(목적별) 레이아웃 </b><img src="/resources/img/guide/download_gray.png" style="width:17px;height:16px;" alt="수도권 생활이동(목적별) 레이아웃"></a><br>
+									<a href="javascript:downloadFile(4,'22');"><b>수도권 생활이동(수단별) 레이아웃 </b><img src="/resources/img/guide/download_gray.png" style="width:17px;height:16px;" alt="수도권 생활이동(수단별) 레이아웃"></a>
+								</li>
+							</ul>
+						</div>
+					 </div>
+					 <div class="st0101_faq">
+						<h2 class="hue-p2 tit-m">FAQ</h2>
+
+						<div class="ui-acco type-faq2" role="group" id="exeFaqacco">
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										'수도권 생활이동 데이터'란 무엇입니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										「특정 시점」,「특정 지역 간」에 '이동'하는 모든 인구로, 통근·통학 목적 등 수도권 안에서 이동하거나 수도권 외부에서 수도권으로 오고 간 모든 사람들의 이동을 측정한 데이터로 통근·통학·병원·쇼핑 등 서울시의 행정수요를 유발하는 모든 이동을 의미합니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										시민이 어떻게 활용할 수 있습니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										서울시 열린데이터광장(data.seoul.go.kr)을 통해 누구나 활용(행정동·1시간 단위)할 수 있으며, 서울시 빅데이터 캠퍼스에서는 보다 세분된 형태(250m 격자·20분 단위)의 데이터를 활용할 수 있습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										구체적으로 어떤 정책에 활용할 예정입니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										다양한 활용 분야가 있겠으나, 특히 광역도시계획 측면에서 수도권 전체를 대광역권으로 설정할 수도 있고, 청년주택을 포함한 공공주택 입지 선정에 활용할 수 있습니다. 또, 대중교통 인프라가 부족한 지역에 버스 노선을 신설·조정하거나, 도로·교통 노선 신설 시 이동량 변화를 파악하여 향후 교통 계획에 반영할 수 있을 것으로 기대합니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										'수도권 생활이동 데이터'를 개발한 이유는 무엇입니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										민선8기 정책기조에 따라 경기, 인천시민도 서울시민과 같은 정책수요자 임을 감안 수도권 도시민을 아우르는 정책개발을 위해 서울에서 수도권으로 확장된 수도권 생활이동 데이터를 개발하게 되었습니다. 수도권 생활이동 데이터는 다양한 정책에 활용이 가능합니다. 광역도시계획, 신도시 수요예측, 버스노선개선, 교통수요예측, 대중교통연계 그리고 지역상권활성화나 관광분야에도 두루 사용될 것으로 기대하고 있습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										스마트폰 보유율이 낮은 연령대에 대한 추계는 어떻게 진행되었습니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										7세 미만 저연령층과 85세 이상 고연령층은 LTE/5G 휴대폰 가입률이 다른 연령대에 비해 현저히 낮습니다. 이에, 해당 연령층의 생활이동은 주변연령층인 7~9세 및 75~84세 주민등록인구 비율만큼 보정하여 대체하였습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										수도권 생활이동 데이터의 출도착지는 어떻게 표시되나요?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										출도착지가 서울 지역일 경우 행정동(예: 소공동-11140520)으로, 
+										 그 외 지역일 경우 시·도(예: 경기도-41000000) 또는 시·군·구(예: 연천군-41800000)로 표시됩니다.<br>
+										[출도착지의 상세정보(단, 수도권 지역만 250m 격자 표시)는 서울시 빅데이터 캠퍼스에서 열람 가능]
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										전국 행정동 코드는 어떻게 정의되는 것인가요?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+									전국 행정동 코드는 행정안전부 행정동 코드(10자리)의 9·10자리 '00'을 제외하고 8자리로 구성됩니다.<br>
+									    [참조: 행정안전부 누리집(www.mois.go.kr) > 업무안내 > 자치혁신실 > 주민등록,인감 > 주민등록,인감]<br>
+									
+									      ※ 전국 행정동 코드 구성<br>- 8자리 코드: (시·도) 2자리 + (시·군·구) 3자리 + (행정동) 3자리<br>
+									        - 코드범위: 서울 지역(행정동), 그 외 지역(시·도 또는 시·군·구)<br>
+									        - (예시) 경기도: 41000000, 연천군: 41800000, 소공동: 11140520
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										250m 격자란 무엇입니까? 왜 이 단위를 사용했습니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										대한민국 영역 최남서단(이어도 인근)을 기준으로 250m 정사각형으로 공간을 나눈 것이 250m 격자입니다. 250m 격자는 행정동의 변경과 관계없이 공간을 연속적으로 분석할 수 있다는 장점이 있습니다. 이러한 장점으로, 도시 정책 연구에서 많이 사용되고 있습니다. 예를 들면 등산로, 해안가 등에 존재하는 행안부에서 지정한 "국가 지점 번호"에서 사용되고 있는 것이 격자 단위의 데이터입니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										공간 단위가 달라지면 현재 개방하는 데이터와 이동량 등의 일관성이 있는가?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										이동 목적을 다양하게 추정하기 위해서, 기존 개방하고 있는 데이터와는 일부 다른 방식의 데이터 처리가 진행되었고, 이에 따라서 기존의 데이터와 이동량이 일부 다를 수 있습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										'야간상주지'와 '주간상주지'가 무엇입니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										생활이동 중 통근·통학 등 정기 통행과 쇼핑·병원 등의 비정기 통행을 판별하기 위해, 이동의 출발지와 도착지 유형을 구분한 것입니다. 일례로 야간상주지는 집, 주간상주지는 직장 또는 학교로 볼 수 있으며, 야간상주지에서 주간상주지로의 이동은 출근·등교 이동으로 해석할 수 있습니다.<br/> 
+							   이동자 개인별로 1달 동안 새벽시간대(오전 5시 포함)에 오래 체류한 지역(60시간 이상)을 야간상주지로, 주간에 오래 체류한 지역을 주간상주지로 추정했습니다. 보다 구체적인 상주지 도출 방법은 데이터와 함께 배포되는 매뉴얼을 참고하시기 바랍니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										체류 시간 기준을 왜 30분으로 정했습니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										대중교통 환승 중인 인원을 체류하는 인원으로 오판하는 것을 방지하고, (전체 통행량을 인구수로 나눈) 일 단위 평균 통행량의 데이터 정확도가 90% 이상이 되는 기준인 30분 체류 시간으로 정했습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										쇼핑 방문 목적의 쇼핑 정의가 어떻게 되나요?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										쇼핑 정의에 대해서 이번 개발에서는 생필품 및 식료품을 구매하는 것은 쇼핑으로 보지 않았습니다. 해당 기준에서 명확히 쇼핑을 한다고 볼 수 있는 지역을 설정한 결과로 백화점과 프리미엄 아울렛에 한정하였습니다. 최초 개발된 수도권 생활이동 데이터가 향후 활용성 측면에서 필요하다면, 마트 나 복합쇼핑몰들도 추가 연구할 수 있습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										병원 방문 목적의 의료기관 정의가 어떻게 되나요?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										서울삼성병원, 서울대병원, 아산병원 등 3차 의료기관을 대상으로 합니다. 2차 의료기관이나 동네 의원 등은 제외하였는데, 해당 의료 기관들은  병원 단독으로 존재하는 것이 아니라 상점 등과 혼합하여 존재합니다. 건물 내에서 어느 곳을 방문했는지에 대해서 현재 통신데이터로 판별하기에는 한계가 있습니다. 향후에는 건물 내 와이파이 수신, 건물 층별 위치 정보 수집 등을 추가 연구할 예정입니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										지하철, 버스 등 이동 수단도 볼 수 있는 건가요?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										작년(2023)에 이동목적을 추정하면서, 지하철/버스 등 교통수단도 시험산출 했습니다. 올해 기존 자료들과의 비교 검증, 정확도 높이기 위한 추가 연구 후 올 하반기 추가로 개방할 예정입니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										왜 KT와 협력을 추진하게 되었습니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										우리시가 보유한 공공데이터만으로는 실제 인구의 이동을 추계하는데 한계가 있어, 통신데이터와 융합해 새로운 데이터를 생산할 필요가 있었습니다. KT 또한 생활이동 데이터 개발을 통한 분석경험을 통해 통신데이터 기반 유동인구정보 검증 및 품질 제고가 가능하다는 판단으로 협력하게 되었습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										KT가 제공하는 휴대폰 시그널 데이터란 무엇입니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										생활이동 데이터는 KT의 휴대폰 LTE 및 5G 시그널 데이터를 기반으로 만들어집니다. 시그널 데이터란 KT 서비스 이용자(가입자 및 로밍 서비스를 사용하는 외국인 방문객 포함)의 휴대폰 단말과 기지국간의 통신 이력을 수집한 데이터입니다. 통화나 문자 등 휴대폰 사용유무와 관계없이 평균 1분마다 수집되어, 휴대폰 소지자의 위치와 동선 파악에 용이하다는 특징이 있습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										생활이동 데이터의 배포주기는 어떻게 됩니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										생활이동은 월 1회 직전 월에 해당하는 데이터가 배포됩니다(2024년 5월에는 2024년 4월 데이터 배포). 연령·성별 정보를 포함한 기초 데이터는 매 시각 생성되지만, 생활이동의 유형을 구분하기 위한 주간상주지, 야간상주지 추정이 1달 단위의 데이터를 활용해 이루어지기 때문입니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										열린데이터 광장에 250m 격자 단위 데이터를 개방하지 않는 이유는 무엇인가요?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										KT와 체결한 협약(당사의 유료상품으로 개방 불가)에 따라 250m 격자 단위 데이터는 빅데이터캠퍼스를 통하여 제한적으로 공개, 활용되고 있습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										앞으로도 지속적으로 배포할 예정입니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										생활이동 데이터는 연령·성·시간 단위의 모바일 기반 이동(mobility) 데이터를 시민에게 무료 공개하는 첫 사례입니다. 이러한 데이터는 연속성이 매우 중요합니다. KT와 협약하여 최소 3년간은 지속적으로 공개 예정이며, 시민 활용도가 높을 경우 모델을 지속적으로 발전시켜 끊임없이 개방 예정입니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										생활이동은 유사 통계·데이터와 어떤 차이가 있습니까?
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										시민이동을 파악할 수 있는 유사 통계는 국토교통부의 '가구통행실태조사', '대중교통 현황조사', 통계청의 '인구주택총조사' 중 통근·통학 인구가 있으며, 유사 데이터로는 대중교통(버스·지하철) 이동을 파악할 수 있는 스마트카드사의 '서울시 대중교통 및 지하철 1회권 승하차 데이터'가 있습니다(빅데이터 캠퍼스에서 제공).<br/>
+							   생활이동은 현장조사로 작성되는 유사 통계(1% 내외)와 달리 전 국민의 약 30%를 대상으로 측정된 데이터로 만들었으며, 시·공간 단위가 세밀하다는 장점이 있습니다(250m 격자·20분 단위 집계). 또한 스마트카드 데이터와 달리 이동의 퍼스트·라스트마일까지 포함합니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										출근 소요 시간이 유사 통계보다 더 길게 집계 되었습니다.
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										다양한 출·퇴근 소요시간 관련 통계·데이터를 분석한 결과, 모바일 데이터 기반 결과가 현장조사기반 결과보다 더 길게 집계되었습니다. 일례로 서울 관련 평균 출근 소요시간은 인구주택총조사(2020)가 37.2분인 반면, 수도권 생활이동(2024.1.16. 기준)은 42분으로 산출되었습니다. 서베이는 개인 응답에 의한 추정값인 반면, 통신데이터는 실제 측정값이라는 점에서 후자의 신뢰도가 더 높다고 할 수 있겠으나, 구체적인 원인은 추가 연구가 필요합니다.
+							<br/>※ 서울 37.2분 소요(전국 최고), 경기 35.3분, 인천 35.0분 순(통계청, 인구총조사(2020))
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							<dl class="ui-acco-wrap">
+								<dt class="ui-acco-tit">
+									<button type="button" class="ui-acco-btn">
+										유사 통계인 '수도권 여객 O/D 전수화 공동사업' 이동량이 더 많다.
+										<span class="ui-acco-arrow">열기</span>
+									</button>
+								</dt>
+								<dd class="ui-acco-pnl">
+									<div class="ico-a">A<span class="hide">답변</span></div>
+									<div class="faq2-cont">
+										2022년 수도권 여객 기준 보고서에 따르면, 기·종점 수단 통행량이 7,680만 건으로 수도권 생활이동 7,135만 건('24.1.16. 기준)보다 약 545만 건 더 많습니다. 이는 수도권 생활이동 데이터가 '체류'를 기준으로 이동을 집계했기 때문입니다. 가구통행은 체류 시간과 관계없이 모든 이동이 수집되는 반면, 생활이동은 특정 공간에서의 체류시간이 30분 이상인 경우에만 기·종점으로 간주하고 이동을 집계합니다. 일례로 생활이동에서는 자녀 등·하교 통행, 동네 산책 등 특정 지점에서의 체류 시간이 짧은 이동 및 매우 가까운 근거리 이동은 제외했습니다. 따라서 다른 통계를 수치적으로 직접 비교하기보다는 상호 보완적으로 활용할 필요가 있습니다.
+									</div>
+									<button type="button" class="btn-accoclose"><span class="hide">닫기</span></button>
+								</dd>
+							</dl>
+							
+							
+														
+						</div>
+
+					</div>
+				</div>
+			</div>
+			<!-- //202108 HTML -->
+	
+			<div class="wrap-a">
+				<div class="wrap-cont ">
+				</div>
+			</div>
+
+			<footer class="base-footer" id="baseFooter">
+				
+    
+
+	<div class="footer-wrap">
+	    <div class="footer-link">
+	        <div class="footer-link-wrap">
+	            <a href="/etc/openInfo.do" title="열린데이터광장소개 이동">열린데이터광장소개</a>
+	            <a href="/etc/openPrivacy.do">개인정보처리방침</a>
+	            <a href="/etc/accessTerms.do">이용약관</a>
+	            <a href="http://www.seoul.go.kr/helper/email.do" target="_blank" title="새창 열림">이메일무단수집거부</a>
+	            <a href="http://www.seoul.go.kr/homepageCorrect/user/hpCorrect.do" target="_blank" title="새창 열림">홈페이지바로잡기</a>
+	        </div>
+	    </div>
+	
+	    <div class="footer-info">
+	        <dl>
+	            <dt><span class="hide">동행·매력 특별시 서울</span></dt>
+	            <dd>
+	                <address>
+	                    <span>서울특별시청 04524 서울특별시 중구 세종대로 110</span>
+	                    <!-- <span>전화번호 02-120 | 대표전화 02-2133-4283, 4279, 4282 | 빅데이터담당관(서소문청사)</span> -->
+	                    <span>전화번호 <a href="tel:02-120">02-120</a> | 대표전화 <a href="tel:02-2133-1271">02-2133-1271</a> | 데이터전략과(서소문청사)</span>
+	                    <span>ⓒ 2012-2026. Seoul Metropolitan Government Some Rights Reserved.</span>
+	                </address>
+	            </dd>
+	            <dd>
+	            	<label for="Slink1"></label>
+	                <select title="관련사이트" id="Slink1">
+	                    <option value="">관련사이트</option>
+	                    <option value="http://seoul.go.kr/">서울시 홈페이지</option>
+	                    <option value="https://bigdata.seoul.go.kr/">빅데이터 캠퍼스</option>
+	                    <option value="http://opengov.seoul.go.kr/">정보소통광장</option>
+	                    <option value="http://kosis.kr/index/index.do">국가통계포털</option>
+	                    <option value="https://sgis.kostat.go.kr/view/map/policyStaticMap">정책통계지도</option>
+	                    <option value="https://narastat.kr/metasvc/index.do">통계설명자료</option>
+	                    <option value="https://data.go.kr/">공공데이터포털</option>	                    
+	                    <option value="https://data.seoul.go.kr/bsp">서울 데이터 허브</option>
+	                </select>
+	                <button type="button" id="btnSlink1" title="새창열림"><span>이동</span></button>
+	            </dd>
+	        </dl>
+	    </div>
+	</div>
+	
+	<script>
+	$(function(){
+		// 관련사이트 링크 버튼
+		$('#btnSlink1').click(function(){
+			if($('#Slink1 option:selected').val() != "")
+				var url = $('#Slink1 option:selected').val();
+				window.open(url, '_blank');
+		});
+	});
+	</script>
+   				
+    
+<script src="/js/common.js?ver=20180713"></script>	
+<script src="/js/feCommon-UIACC_min.js"></script> 
+
+<!-- 로거 -->
+<script src="//weblog.eseoul.go.kr/wlo/js/install.js"></script>
+
+<!--
+<script src="//wcs.naver.net/wcslog.js"></script>
+<script>
+	if(!wcs_add) var wcs_add = {};
+	wcs_add["wa"] = "63fee380286b50";
+	wcs_do();
+</script> 
+-->
+
+
+			</footer>
+			
+		</section>
+	</div>
+
+	<script>
+        (function($, win, doc, undefined) {
+            $(doc).ready(function(){
+
+				//필수실행
+                $plugins.common.init();	
+				$plugins.uiAccordion({ 
+					id:'exeFaqacco', 
+					current:null, 
+					autoclose:true
+				});
+				$('.btn-accoclose').on('click', function(){
+					$plugins.uiAccordionToggle({
+						id:'exeFaqacco',
+						current:'all',
+						state:'close'
+					})
+
+				});
+            });
+        })(jQuery, window, document);
+	</script>
+
+	
+
+
+<!-- 사이트맵 -->
+<section class="modal type-sitemap" id="sitemap" role="dialog" aria-hidden="true">
+    <div class="ui-modal-wrap">
+        <header class="ui-modal-header">
+            <h2 class="ui-modal-tit"><span>서울 열린데이터광장</span></h2>
+        </header>
+        <div class="ui-modal-cont">
+            <ul class="sitemap-wrap">
+                <li class="sitemap-item n1">
+                    <h3>공공데이터</h3>
+                    <ul>
+                        <li><a href="/dataList/datasetList.do?datasetKind=1&searchFlag=M">공공데이터</a></li><!-- 20220520 edit -->
+                        <li><a href="/dataList/literacyList.do">인기그룹데이터</a></li>
+                        <li><a href="/datasetRanking/new.do">새로 개방한 데이터</a></li>
+                        <li><a href="/datasetRanking/popular.do">인기데이터</a></li>
+                        <li><a href="https://lod.seoul.go.kr/home/" onclick="javascript:goLinkedData();return false;">Linked Open Data</a></li>
+                        <li><a href="/link/districtList.do">자치구 열린데이터</a></li>
+<!--                         <li><a href="/goUrlLog.do?toUrl=https://data.seoul.go.kr/bsp/wgs/intro/datamap.do?utm_source=opendataplaza&utm_medium=gnbDataMap&utm_campaign=opendataplaza" target="_blank" title="새창열림">데이터 맵</a></li> -->
+                        <li><a href="#" onclick="javascript:goUrl('https://data.seoul.go.kr/bsp/wgs/intro/datamap.do?utm_source=opendataplaza&utm_medium=gnbDataMap&utm_campaign=opendataplaza');" title="새창열림">데이터 맵</a></li>
+                        <!-- <li><a href="/together/bbs/bbsList.do">공공데이터 제공신청</a></li> -->
+                    </ul>
+                </li>
+                <li class="sitemap-item n2">
+                    <h3>통계</h3>
+                    <ul>
+                        <li><a href="/dataList/datasetList.do?datasetKind=2&searchFlag=M">통계표</a>
+                        <li><a href="/dataService/boardList.do">통계목록</a></li>
+                        <li><a href="/dataService/statList.do">통계소식</a></li>
+                        <li><a href="/dataVisual/seoul/seoulList.do">서울의하루</a>
+                        <li><a href="/together/statbook/statbookList.do">서울통계간행물</a></li>
+                        <li><a href="/dataVisual/seoul/bestList.do">서울의 인기통계</a></li>
+                        <li><a href="/dataVisual/seoul/seoul100List.do">서울의 100대통계</a></li>
+                        <li><a href="https://stat.eseoul.go.kr/stat/sip/sts/map/statsMap.do" target="_blank">한눈에 보는 사업체</a></li>
+                    </ul>
+                </li>
+                <li class="sitemap-item n3">
+                    <h3>서울빅데이터</h3>
+                    <ul>
+                        <li><a href="/dataVisual/seoul/seoulLivingPopulation.do">서울 생활인구</a></li>
+                        <li><a href="/dataVisual/seoul/capitalRegionLivingMigration.do">수도권 생활이동</a></li>
+                        <li><a href="/dataVisual/seoul/seoulLiving.do">서울 시민생활 데이터</a></li>
+                        <li><a href="/dataVisual/seoul/guide.do">서울 실시간 도시데이터</a></li>
+                        <li><a href="/dataVisual/seoul/SeoulConsumerLogistics.do">서울 생활물류</a></li>
+                        <li><a href="/etc/aiEduData.do">AI학습데이터</a></li>
+<!--                         <li><a href="/goUrlLog.do?toUrl=https://data.seoul.go.kr/bsp/wgs/index.do?utm_source=opendataplaza&utm_medium=gnbSeoulDataHub&utm_campaign=opendataplaza" target="_blank" title="새창열림">서울 데이터 허브</a></li> -->
+						<li><a href="#" onclick="javascript:goUrl('https://data.seoul.go.kr/bsp/wgs/index.do?utm_source=opendataplaza&utm_medium=gnbSeoulDataHub&utm_campaign=opendataplaza');" title="새창열림">서울 데이터 허브</a></li>
+                    </ul>
+                </li>
+                <li class="sitemap-item n4">
+                    <h3>소식&amp;참여</h3>
+					<ul>
+						<li><a href="/together/notice/datasetNoticeList.do">데이터소식</a></li>
+						<li><a href="/together/notice/boardList.do">공지사항</a></li>
+						<li><a href="/together/notice/faqList.do">FAQ</a></li>
+						<li><a href="/together/notice/inquireList.do">문의하기</a></li>
+						<li><a href="/dataVisual/gallery/galleryList.do">활용사례(갤러리)</a></li>
+						<li><a href="/together/bbs/bbsList.do">데이터 수요창구</a></li>
+						<li><a href="/together/newsletter/newsletter.do">열광 뉴스레터</a></li>
+						<li><a href="/together/notice/fellowshipList.do">서울 데이터 펠로우쉽</a></li>
+						<li><a href="/together/cpthb/cpthbDetail.do">경진대회</a></li>
+					</ul>
+                </li>
+                <li class="sitemap-item n5">
+                    <h3>이용안내</h3>
+					<ul>
+						<li><a href="/etc/openInfo.do">열광소개</a></li>
+						<li><a href="/together/guide/useGuide.do">Open API 소개</a></li>
+						<li><a href="/etc/offerReqst.do">공공데이터 제공신청</a></li>
+					</ul>
+                </li>
+                <!-- 
+                 <li class="sitemap-item n5" style="margin-top: -50px; ">
+                    <h3 style="margin-top:30px;">나의화면</h3>
+                    <ul>
+                        <li><a href="/together/mypage/actkeyMain.do">인증키 신청</a></li>
+                        <li><a href="/together/mypage/actkeyMng_ss.do">인증키 관리</a></li>
+                        <li><a href="/together/mypage/myQnaList_ss.do">문의 관리</a></li>
+                        <li><a href="/together/mypage/galleryMng_ss.do">갤러리 관리</a></li>
+                    </ul>
+                </li>
+                 -->
+            </ul>
+        </div>
+		<a href="#" onclick="javascript:hideModal('sitemap');" class="ui-modal-close btn-txtclose" >메뉴 닫기</a>
+    </div>
+</section>
+
+</body>
+</html>	       

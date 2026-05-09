@@ -1,0 +1,25 @@
+# macOS / editor
+.DS_Store
+.vscode/
+__pycache__/
+*.py[cod]
+
+# Secrets
+.env
+data_archive/.env
+data_archive/metadata/seoul_cookie.txt
+
+# Generated analysis outputs
+# These are reproducible by running:
+#   python3 seoul_mobility_analysis.py
+output/
+
+# Local raw data files
+# Keep these locally, but do not push them to GitHub.
+data_archive/raw/*
+!data_archive/raw/.gitkeep
+
+# Python environments
+.venv/
+venv/
+env/
