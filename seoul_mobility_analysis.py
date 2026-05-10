@@ -32,6 +32,8 @@ Important notes
 from __future__ import annotations
 
 import os
+import subprocess
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -49,11 +51,12 @@ import re
 PROJECT_ROOT = Path(__file__).resolve().parent
 ARCHIVE_DIR = PROJECT_ROOT / "data_archive"
 
-# SEOUL_RAW_DIR env var overrides the default raw path — used in Colab/Google Drive setups
+# SEOUL_RAW_DIR / SEOUL_OUTPUT_DIR env vars override defaults — used in Colab/Google Drive setups
 _raw_env = os.environ.get("SEOUL_RAW_DIR")
 RAW_DIR = Path(_raw_env) if _raw_env else ARCHIVE_DIR / "raw"
 
-OUTPUT_ROOT = PROJECT_ROOT / "output"
+_output_env = os.environ.get("SEOUL_OUTPUT_DIR")
+OUTPUT_ROOT = Path(_output_env) if _output_env else PROJECT_ROOT / "output"
 PROCESSED_DIR = OUTPUT_ROOT / "processed"
 REPORTS_DIR = OUTPUT_ROOT / "reports"
 
@@ -1354,12 +1357,79 @@ def run_all() -> None:
                 "adjusted_mobility_score",
                 "mobility_score",
                 "young_single_ratio",
-        "cnt_2030",
-        "avg_daily_2030",
-        "date_count",
-    ]
+                "cnt_2030",
+                "avg_daily_2030",
+                "date_count",
+            ]
         ].to_string(index=False)
     )
+
+    print("\n5. Committing output files to git...")
+    commit_outputs()
+
+
+def commit_outputs(
+    git_user_name: str = "seoul-mobility-bot",
+    git_user_email: str = "bot@seoul-mobility",
+) -> None:
+    """Stage output files, create a timestamped git commit, and push to remote."""
+    repo_root = PROJECT_ROOT
+
+    def run(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
+        return subprocess.run(args, cwd=repo_root, capture_output=True, text=True, check=check)
+
+    # git이 없으면 건너뜀
+    if subprocess.run(["which", "git"], capture_output=True).returncode != 0:
+        print("   git not found — skipping commit")
+        return
+
+    # 저장소가 없으면 초기화
+    if not (repo_root / ".git").exists():
+        run(["git", "init"])
+        print(f"   git init: {repo_root}")
+
+    # Colab 등 git config가 없는 환경에서 최소 설정
+    if not run(["git", "config", "user.name"], check=False).stdout.strip():
+        run(["git", "config", "user.name", git_user_name])
+        run(["git", "config", "user.email", git_user_email])
+
+    # output 하위의 .md / .png / .csv 만 스테이징
+    # SEOUL_OUTPUT_DIR이 repo 밖(Drive 등)이면 git add 대상이 없으므로 repo 내 output/ 경로도 시도
+    output_rel = OUTPUT_ROOT.relative_to(repo_root) if OUTPUT_ROOT.is_relative_to(repo_root) else None
+    base = str(output_rel) if output_rel else "output"
+    patterns = [f"{base}/**/*.md", f"{base}/**/*.png", f"{base}/**/*.csv"]
+    for pattern in patterns:
+        result = run(["git", "add", "--", pattern], check=False)
+        if result.returncode != 0 and result.stderr.strip():
+            print(f"   warning (git add {pattern}): {result.stderr.strip()}")
+
+    status = run(["git", "status", "--porcelain"], check=False).stdout.strip()
+    if not status:
+        print("   nothing to commit — output files unchanged")
+        return
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    msg = f"chore: update analysis outputs [{timestamp}]"
+    result = run(["git", "commit", "-m", msg], check=False)
+    if result.returncode != 0:
+        print(f"   git commit failed: {result.stderr.strip()}")
+        return
+
+    short_hash = run(["git", "rev-parse", "--short", "HEAD"], check=False).stdout.strip()
+    print(f"   committed: {short_hash} — {msg}")
+
+    # 원격 저장소가 있으면 push
+    remotes = run(["git", "remote"], check=False).stdout.strip()
+    if not remotes:
+        print("   no remote configured — skipping push (add one with: git remote add origin <url>)")
+        return
+
+    branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], check=False).stdout.strip()
+    push_result = run(["git", "push", "origin", branch], check=False)
+    if push_result.returncode == 0:
+        print(f"   pushed to origin/{branch}")
+    else:
+        print(f"   push failed: {push_result.stderr.strip()}")
 
 
 if __name__ == "__main__":
