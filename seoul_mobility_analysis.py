@@ -36,6 +36,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import zipfile
 from zipfile import ZipFile
 from xml.etree import ElementTree as ET
 import re
@@ -429,6 +430,13 @@ def summarize_living_migration(
         raise FileNotFoundError(f"No living-migration ZIP files found: {RAW_DIR / LIVING_MIGRATION_PATTERN}")
 
     for input_path in input_paths:
+        try:
+            with zipfile.ZipFile(input_path):
+                pass
+        except zipfile.BadZipFile:
+            print(f"   WARNING: skipping invalid ZIP (possibly an error page): {input_path.name}")
+            continue
+
         print(f"   reading living migration: {input_path.name}")
         for chunk in pd.read_csv(
             input_path,
@@ -558,6 +566,13 @@ def summarize_living_migration_monthly(
         input_paths = get_month_end_living_migration_paths()
 
     for input_path in input_paths:
+        try:
+            with zipfile.ZipFile(input_path):
+                pass
+        except zipfile.BadZipFile:
+            print(f"   WARNING: skipping invalid ZIP (possibly an error page): {input_path.name}")
+            continue
+
         print(f"   reading monthly snapshot: {input_path.name}")
         for chunk in pd.read_csv(
             input_path,
