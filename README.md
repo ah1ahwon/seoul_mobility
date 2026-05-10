@@ -30,6 +30,10 @@
 - `seoul_purpose_admdong4_in_202603*.zip`
   - 수도권 생활이동 연령별 출발-도착지 기준, 내국인 목적별, 2026년 3월 30개 일자
   - 원천 페이지에 2026년 3월 28일 파일은 없어 30개 파일을 사용
+- `seoul_purpose_admdong4_in_YYYYMMDD.zip`
+  - 2023년 1월~2026년 3월 월말 스냅샷 39개 파일
+  - `data_archive/metadata/living_migration_month_end_manifest.csv` 기준으로 아카이빙
+  - 장기 월별 추세 분석용이며, 전체 일별 월간 합계가 아니라 각 월의 월말 대표일 비교
 - `seoul_admin_dong_area.zip`
   - 서울시 상권분석서비스 영역-행정동, 행정동 코드/명칭 매핑용
 - `seoul_living_interest_groups_202512.xlsx`
@@ -60,10 +64,15 @@ python3 seoul_mobility_analysis.py
 - `output/processed/young_single_household_residential_summary.csv`
 - `output/processed/visitor_candidate_summary.csv`
 - `output/processed/residential_dominant_2030_summary.csv`
+- `output/processed/monthly_living_migration_2030_summary.csv`
+- `output/processed/monthly_visitor_candidate_summary.csv`
+- `output/processed/monthly_candidate_trend_summary.csv`
 - `output/reports/living_migration_2030_top20.md`
 - `output/reports/interpretation_report.md`
 - `output/reports/visitor_candidate_top20.md`
 - `output/reports/residential_dominant_2030_top20.md`
+- `output/reports/monthly_visitor_candidate_latest_top20.md`
+- `output/reports/monthly_candidate_trend_top20.md`
 
 ## Current Scoring Logic
 
@@ -87,6 +96,8 @@ adjusted_mobility_score =
 
 `residential_dominance_score`는 서울 시민생활 데이터의 2030 1인가구수, 2030 1인가구 비율, 외출 적은 집단 비중을 조합해 계산합니다.
 
+월별 분석에서는 같은 점수식을 각 월 안에서 다시 표준화합니다. 이렇게 해야 월별 전체 이동량 차이가 아니라, 해당 월 안에서 상대적으로 강한 행정동을 비교할 수 있습니다.
+
 후보 유형:
 
 - `핵심 후보형`
@@ -106,4 +117,10 @@ adjusted_mobility_score =
 
 ```bash
 bash data_archive/scripts/download_latest_examples.sh
+```
+
+월별 추세용 생활이동 월말 파일은 아래 스크립트로 받을 수 있습니다.
+
+```bash
+bash data_archive/scripts/download_living_migration_month_end.sh
 ```
