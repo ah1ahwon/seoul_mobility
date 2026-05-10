@@ -63,32 +63,69 @@ python3 -m pip install -r requirements.txt
 
 ## Run
 
+### 로컬 실행
+
 ```bash
 python3 seoul_mobility_analysis.py
 ```
+
+환경변수로 경로를 오버라이드할 수 있습니다.
+
+| 환경변수 | 기본값 | 설명 |
+|---|---|---|
+| `SEOUL_RAW_DIR` | `data_archive/raw/` | 원천 파일 위치 |
+| `SEOUL_OUTPUT_DIR` | `output/` (스크립트 기준) | 결과 파일 저장 위치 |
+
+### Google Colab 실행
+
+`Seoul_Mobility_Colab.ipynb` 또는 `Seoul_Mobility_Full_Pipeline.ipynb`을 Colab에서 열어 실행합니다.
+
+```python
+import os
+os.environ["SEOUL_RAW_DIR"]    = "/content/drive/MyDrive/seoul_mobility/raw"
+os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
+
+!python3 /content/seoul_mobility/seoul_mobility_analysis.py
+```
+
+Drive에 마운트된 경로를 `SEOUL_OUTPUT_DIR`로 지정하면 결과가 Drive에 직접 저장됩니다. 분석 완료 후 `commit_outputs()`가 자동 실행되어 output 하위 파일을 git 커밋하고 원격 저장소에 push합니다.
 
 생성 결과는 `output/` 아래에 저장됩니다.
 
 주요 산출물:
 
-- `output/processed/living_migration_2030_destination_summary.csv`
-- `output/processed/living_migration_2030_destination_hourly.csv`
-- `output/processed/subway_station_summary.csv`
-- `output/processed/bus_stop_summary.csv`
-- `output/processed/young_single_household_residential_summary.csv`
-- `output/processed/visitor_candidate_summary.csv`
-- `output/processed/mixed_commercial_residential_summary.csv`
-- `output/processed/residential_dominant_2030_summary.csv`
-- `output/processed/monthly_living_migration_2030_summary.csv`
-- `output/processed/monthly_visitor_candidate_summary.csv`
-- `output/processed/monthly_candidate_trend_summary.csv`
-- `output/reports/living_migration_2030_top20.md`
-- `output/reports/interpretation_report.md`
-- `output/reports/visitor_candidate_top20.md`
-- `output/reports/mixed_commercial_residential_top20.md`
-- `output/reports/residential_dominant_2030_top20.md`
-- `output/reports/monthly_visitor_candidate_latest_top20.md`
-- `output/reports/monthly_candidate_trend_top20.md`
+**processed/**
+
+| 파일 | 설명 |
+|---|---|
+| `admin_dong_mapping.csv` | 행정동 코드-명칭-좌표 매핑 |
+| `young_single_household_residential_summary.csv` | 2030 1인가구 거주성 요약 |
+| `subway_station_daily.csv` | 지하철 역별 일별 승하차 원본 전처리 |
+| `subway_station_summary.csv` | 지하철 역별 집계 요약 |
+| `bus_stop_route_summary.csv` | 버스 정류장/노선별 집계 요약 |
+| `bus_stop_route_hourly.csv` | 버스 정류장/노선별 시간대별 long format |
+| `bus_stop_summary.csv` | 버스 정류장별 집계 요약 |
+| `bus_hourly_citywide_summary.csv` | 시간대별 서울 전체 버스 집계 |
+| `living_migration_2030_destination_summary.csv` | 2030 생활이동 행정동별 전체 결과 |
+| `living_migration_2030_destination_hourly.csv` | 2030 생활이동 행정동별 시간대별 결과 |
+| `visitor_candidate_summary.csv` | 방문 상권 후보 (거주성 낮음) |
+| `mixed_commercial_residential_summary.csv` | 혼재형 후보 (상권+거주 동시 강함) |
+| `residential_dominant_2030_summary.csv` | 2030 자취/거주성 분리 대상 |
+| `monthly_living_migration_2030_summary.csv` | 월별 2030 생활이동 전체 요약 |
+| `monthly_visitor_candidate_summary.csv` | 월별 방문 상권 후보 |
+| `monthly_candidate_trend_summary.csv` | 장기 월별 강세 후보 트렌드 |
+
+**reports/**
+
+| 파일 | 설명 |
+|---|---|
+| `living_migration_2030_top20.md` | 전체 Top 20 보정 점수 순위 |
+| `visitor_candidate_top20.md` | 방문 상권 후보 Top 20 |
+| `mixed_commercial_residential_top20.md` | 혼재형 후보 Top 20 |
+| `residential_dominant_2030_top20.md` | 2030 자취/거주성 분리 대상 Top 20 |
+| `monthly_visitor_candidate_latest_top20.md` | 최신 월 방문 상권 후보 Top 20 |
+| `monthly_candidate_trend_top20.md` | 장기 월별 강세 후보 Top 20 |
+| `interpretation_report.md` | 전체 결과 해석 보고서 |
 
 ## Current Scoring Logic
 
@@ -131,11 +168,13 @@ adjusted_mobility_score =
 
 ## Git Notes
 
-`data_archive/raw/`와 `output/`은 Git에서 제외합니다. 원천 데이터와 분석 결과물은 로컬에서 재생성하거나 다시 다운로드하는 방식으로 관리합니다.
+`data_archive/raw/`는 용량이 크므로 Git에서 제외합니다. 원천 데이터는 로컬에서 재다운로드하는 방식으로 관리합니다.
 
 `data_archive/.env`에는 API 키가 들어 있으므로 Git에서 제외합니다. 공유할 때는 `data_archive/.env.example`만 사용하세요.
 
-원천 파일이 없는 새 환경에서는 `data_archive/scripts/download_latest_examples.sh`를 실행해 샘플 데이터를 다시 받을 수 있습니다.
+`output/` 하위의 분석 결과물(`.md`, `.png`, `.csv`)은 분석 스크립트 실행 완료 시 `commit_outputs()`가 자동으로 git 커밋하고 원격 저장소에 push합니다. Colab에서 Drive 경로로 저장할 경우에는 git 스테이징 대상에서 벗어날 수 있으므로, 결과를 버전 관리하려면 `SEOUL_OUTPUT_DIR`을 repo 내 경로로 설정하거나 원격 저장소에 remote가 설정되어 있어야 합니다.
+
+원천 파일이 없는 새 환경에서는 아래 스크립트로 샘플 데이터를 다시 받을 수 있습니다.
 
 ```bash
 bash data_archive/scripts/download_latest_examples.sh
