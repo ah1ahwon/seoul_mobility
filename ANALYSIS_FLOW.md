@@ -277,6 +277,18 @@ data_archive/raw/*
 bash data_archive/scripts/download_latest_examples.sh
 ```
 
+월별 추세 분석용 생활이동 월말 스냅샷은 다음 스크립트로 받는다.
+
+```bash
+bash data_archive/scripts/download_living_migration_month_end.sh
+```
+
+월말 스냅샷 목록은 아래 manifest에 저장한다.
+
+```text
+data_archive/metadata/living_migration_month_end_manifest.csv
+```
+
 ### Step 2. 행정동 코드 매핑
 
 `seoul_admin_dong_area.zip`의 DBF에서 다음 컬럼을 추출한다.
@@ -291,9 +303,16 @@ RELM_AR
 
 이를 통해 생활이동의 도착 행정동 코드를 행정동명으로 바꾼다.
 
-### Step 3. 2030 생활이동 월 단위 요약
+### Step 3. 2030 생활이동 요약
 
-생활이동 ZIP 30개를 순차적으로 읽고, 각 ZIP 내부 CSV를 chunk 단위로 처리한다.
+두 종류의 생활이동 요약을 만든다.
+
+| 구분 | 사용 파일 | 목적 |
+|---|---|---|
+| 2026년 3월 상세 분석 | `seoul_purpose_admdong4_in_202603*.zip` 30개 일자 | 최신 구간의 안정적인 행정동 후보 도출 |
+| 월별 추세 분석 | 2023년 1월~2026년 3월 월말 스냅샷 39개 | 긴 기간의 반복 강세/변화 방향 확인 |
+
+생활이동 ZIP을 순차적으로 읽고, 각 ZIP 내부 CSV를 chunk 단위로 처리한다.
 
 도착 행정동별로 다음 값을 집계한다.
 
@@ -325,6 +344,8 @@ mobility_score =
 
 - 값이 높을수록 2030 도착 신호가 강하다.
 - 단, 이 점수만 보면 자취/거주지 효과가 섞인다.
+
+월별 추세 분석에서는 같은 점수식을 `yyyymm`별로 따로 계산한다. 전체 이동량이 계절이나 월별로 달라져도, 같은 월 안에서 상대적으로 강한 행정동을 비교하기 위해서다.
 
 ### Step 4. 2030 자취/거주성 점수 생성
 
@@ -452,6 +473,42 @@ output/reports/residential_dominant_2030_top20.md
 사근동
 ```
 
+#### 월별 방문 상권 후보
+
+```text
+output/processed/monthly_living_migration_2030_summary.csv
+output/processed/monthly_visitor_candidate_summary.csv
+output/reports/monthly_visitor_candidate_latest_top20.md
+```
+
+2023년 1월부터 2026년 3월까지 월말 대표일 기준으로 계산한 월별 후보 결과다.
+
+최신 월인 2026년 3월 월말 스냅샷 기준 상위 예시:
+
+```text
+잠실6동
+여의동
+삼성1동
+원효로1동
+성수2가3동
+행당1동
+서초4동
+천호3동
+문래동
+자양4동
+```
+
+#### 장기 월별 강세 후보
+
+```text
+output/processed/monthly_candidate_trend_summary.csv
+output/reports/monthly_candidate_trend_top20.md
+```
+
+월별 스냅샷 전체에서 최신 점수, 평균 점수, 점수 기울기, 최근 6개월 변화, 방문 후보 Top 20 반복 등장 횟수를 결합한 결과다.
+
+현재 데이터에서는 순수 상승 후보보다 여러 달 동안 반복적으로 강한 후보가 상위에 많이 나타난다. 따라서 이 결과는 "새로 뜨는 곳"만을 뜻하지 않고, 2030 방문성이 장기간 유지된 강세 지역까지 포함한다.
+
 ## 4. 최종 해석 기준
 
 현재 분석에서는 다음 순서로 결과를 본다.
@@ -472,7 +529,7 @@ output/reports/residential_dominant_2030_top20.md
 현재 분석은 다음 한계를 가진다.
 
 - 생활이동 데이터는 2026년 3월 30개 일자 샘플이다. 3월 28일 파일은 원천 목록에 없어 제외되었다.
-- 아직 여러 달의 시계열 변화는 반영하지 않았다.
+- 월별 추세 분석은 2023년 1월~2026년 3월 월말 대표일 39개 파일을 사용한다. 전체 일별 월간 합계가 아니므로 특정 월말 이벤트나 요일 효과가 섞일 수 있다.
 - 지하철/버스 데이터는 아직 행정동과 공간 결합하지 않았다.
 - 소비 데이터와 점포 데이터는 아직 결합하지 않았다.
 - 2030 자취/거주성 보정은 완전 제거가 아니라 감점/분리 장치다.
@@ -482,7 +539,7 @@ output/reports/residential_dominant_2030_top20.md
 
 분석 신뢰도를 높이기 위한 다음 단계는 다음과 같다.
 
-1. 생활이동 데이터를 여러 날짜로 확장
+1. 월말 스냅샷이 아닌 월 전체 일별 집계로 확장
 2. 평일/주말 분리
 3. 역·정류장 좌표를 행정동 경계와 공간 결합
 4. 행정동별 교통 접근성 지표 생성

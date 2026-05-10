@@ -55,6 +55,7 @@ REPORTS_DIR = OUTPUT_ROOT / "reports"
 SUBWAY_CSV = RAW_DIR / "CARD_SUBWAY_MONTH_202604.csv"
 BUS_CSV = RAW_DIR / "bus_time_station_202604.csv"
 LIVING_MIGRATION_PATTERN = "seoul_purpose_admdong4_in_202603*.zip"
+LIVING_MIGRATION_MONTH_END_MANIFEST = ARCHIVE_DIR / "metadata" / "living_migration_month_end_manifest.csv"
 ADMIN_DONG_AREA_ZIP = RAW_DIR / "seoul_admin_dong_area.zip"
 LIVING_INTEREST_XLSX = RAW_DIR / "seoul_living_interest_groups_202512.xlsx"
 
@@ -368,6 +369,27 @@ def zscore(series: pd.Series) -> pd.Series:
     return (series - series.mean()) / std
 
 
+def zscore_by_group(df: pd.DataFrame, group_col: str, value: pd.Series) -> pd.Series:
+    """Return z-scores calculated within each group."""
+    temp = pd.DataFrame({group_col: df[group_col], "value": value}, index=df.index)
+    return temp.groupby(group_col)["value"].transform(zscore)
+
+
+def get_month_end_living_migration_paths(
+    manifest_path: Path = LIVING_MIGRATION_MONTH_END_MANIFEST,
+) -> list[Path]:
+    """Return existing month-end living-migration files listed in the archive manifest."""
+    manifest = pd.read_csv(manifest_path, dtype={"yyyymm": "string", "filename": "string"})
+    paths = [RAW_DIR / filename for filename in manifest["filename"]]
+    existing = [path for path in paths if path.exists()]
+    if not existing:
+        raise FileNotFoundError(f"No month-end living-migration ZIP files found from: {manifest_path}")
+    missing = [path.name for path in paths if not path.exists()]
+    if missing:
+        print(f"   warning: {len(missing)} month-end files are missing and will be skipped")
+    return existing
+
+
 def summarize_living_migration(
     input_paths: list[Path] | None = None,
     chunksize: int = 500_000,
@@ -501,6 +523,131 @@ def summarize_living_migration(
     return dest, hourly
 
 
+def summarize_living_migration_monthly(
+    input_paths: list[Path] | None = None,
+    chunksize: int = 500_000,
+) -> pd.DataFrame:
+    """
+    Summarize 2030 destination demand by month and administrative dong.
+
+    The monthly trend uses one month-end snapshot per month. It is intended for
+    long-range direction finding, while the full March 2026 daily files remain
+    the detailed current-period view.
+    """
+    usecols = [
+        "o_admdong_cd",
+        "d_admdong_cd",
+        "st_time_cd",
+        "move_dist",
+        "move_time",
+        "2030_cnt",
+        "total_cnt",
+        "etl_ymd",
+    ]
+
+    dest_parts = []
+    origin_parts = []
+    date_parts = []
+    month_file_counts: dict[str, int] = {}
+
+    if input_paths is None:
+        input_paths = get_month_end_living_migration_paths()
+
+    for input_path in input_paths:
+        print(f"   reading monthly snapshot: {input_path.name}")
+        for chunk in pd.read_csv(
+            input_path,
+            compression="zip",
+            usecols=usecols,
+            dtype={
+                "o_admdong_cd": "string",
+                "d_admdong_cd": "string",
+                "st_time_cd": "string",
+                "etl_ymd": "string",
+            },
+            chunksize=chunksize,
+        ):
+            chunk["yyyymm"] = chunk["etl_ymd"].astype(str).str[:6]
+
+            for col in ["move_dist", "move_time", "2030_cnt", "total_cnt"]:
+                chunk[col] = pd.to_numeric(chunk[col], errors="coerce").fillna(0.0)
+
+            chunk["weighted_move_time_2030"] = chunk["move_time"] * chunk["2030_cnt"]
+            chunk["weighted_move_dist_2030"] = chunk["move_dist"] * chunk["2030_cnt"]
+            chunk["is_evening"] = chunk["st_time_cd"].astype(str).str.zfill(2).isin(
+                ["18", "19", "20", "21", "22", "23"]
+            )
+            chunk["evening_2030_cnt"] = np.where(chunk["is_evening"], chunk["2030_cnt"], 0.0)
+
+            dest_parts.append(
+                chunk.groupby(["yyyymm", "d_admdong_cd"], as_index=False).agg(
+                    cnt_2030=("2030_cnt", "sum"),
+                    total_cnt=("total_cnt", "sum"),
+                    weighted_move_time_2030=("weighted_move_time_2030", "sum"),
+                    weighted_move_dist_2030=("weighted_move_dist_2030", "sum"),
+                    evening_2030_cnt=("evening_2030_cnt", "sum"),
+                    row_count=("d_admdong_cd", "size"),
+                )
+            )
+
+            origin_parts.append(
+                chunk.loc[chunk["2030_cnt"] > 0, ["yyyymm", "d_admdong_cd", "o_admdong_cd"]]
+                .drop_duplicates()
+            )
+            date_parts.append(
+                chunk.loc[chunk["2030_cnt"] > 0, ["yyyymm", "d_admdong_cd", "etl_ymd"]]
+                .drop_duplicates()
+            )
+
+    for input_path in input_paths:
+        yyyymm = re.search(r"_(\d{6})\d{2}\.zip$", input_path.name)
+        if yyyymm:
+            key = yyyymm.group(1)
+            month_file_counts[key] = month_file_counts.get(key, 0) + 1
+
+    dest = pd.concat(dest_parts, ignore_index=True)
+    dest = dest.groupby(["yyyymm", "d_admdong_cd"], as_index=False).sum(numeric_only=True)
+
+    origins = pd.concat(origin_parts, ignore_index=True).drop_duplicates()
+    origin_counts = origins.groupby(["yyyymm", "d_admdong_cd"], as_index=False).agg(
+        origin_diversity=("o_admdong_cd", "nunique")
+    )
+    dates = pd.concat(date_parts, ignore_index=True).drop_duplicates()
+    date_counts = dates.groupby(["yyyymm", "d_admdong_cd"], as_index=False).agg(
+        active_days=("etl_ymd", "nunique")
+    )
+
+    dest = dest.merge(origin_counts, on=["yyyymm", "d_admdong_cd"], how="left")
+    dest = dest.merge(date_counts, on=["yyyymm", "d_admdong_cd"], how="left")
+    dest["origin_diversity"] = dest["origin_diversity"].fillna(0).astype("int64")
+    dest["active_days"] = dest["active_days"].fillna(0).astype("int64")
+    dest["date_count"] = dest["yyyymm"].map(month_file_counts).fillna(1).astype("int64")
+    dest["avg_daily_2030"] = dest["cnt_2030"] / dest["date_count"]
+    dest["share_2030"] = np.where(dest["total_cnt"] > 0, dest["cnt_2030"] / dest["total_cnt"], 0.0)
+    dest["avg_move_time_2030"] = np.where(
+        dest["cnt_2030"] > 0,
+        dest["weighted_move_time_2030"] / dest["cnt_2030"],
+        0.0,
+    )
+    dest["avg_move_dist_2030"] = np.where(
+        dest["cnt_2030"] > 0,
+        dest["weighted_move_dist_2030"] / dest["cnt_2030"],
+        0.0,
+    )
+    dest["evening_2030_ratio"] = np.where(
+        dest["cnt_2030"] > 0,
+        dest["evening_2030_cnt"] / dest["cnt_2030"],
+        0.0,
+    )
+    dest["mobility_score"] = (
+        zscore_by_group(dest, "yyyymm", np.log1p(dest["cnt_2030"]))
+        + zscore_by_group(dest, "yyyymm", dest["share_2030"])
+        + zscore_by_group(dest, "yyyymm", np.log1p(dest["origin_diversity"]))
+        + zscore_by_group(dest, "yyyymm", dest["evening_2030_ratio"])
+    )
+    return dest.sort_values(["yyyymm", "mobility_score", "cnt_2030"], ascending=[True, False, False])
+
+
 def classify_candidate(row: pd.Series, quantiles: dict[str, float]) -> str:
     high_cnt = row["cnt_2030"] >= quantiles["cnt_2030_75"]
     high_share = row["share_2030"] >= quantiles["share_2030_75"]
@@ -577,6 +724,13 @@ def enrich_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) 
     return enriched[display_cols + other_cols]
 
 
+def enrich_monthly_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) -> pd.DataFrame:
+    enriched_parts = []
+    for _, month_df in dest.groupby("yyyymm", sort=True):
+        enriched_parts.append(enrich_destination_summary(month_df, admin_mapping))
+    return pd.concat(enriched_parts, ignore_index=True)
+
+
 def add_residential_adjustment(dest: pd.DataFrame, residential: pd.DataFrame) -> pd.DataFrame:
     enriched = dest.merge(
         residential,
@@ -639,6 +793,100 @@ def add_residential_adjustment(dest: pd.DataFrame, residential: pd.DataFrame) ->
     other_cols = [col for col in enriched.columns if col not in front_cols]
     return enriched[front_cols + other_cols].sort_values(
         ["adjusted_mobility_score", "mobility_score"], ascending=False
+    )
+
+
+def build_monthly_candidate_trends(monthly: pd.DataFrame) -> pd.DataFrame:
+    """Create cross-month visitor-candidate trend metrics by administrative dong."""
+    latest_month = monthly["yyyymm"].max()
+    latest_period = pd.Period(latest_month, freq="M")
+    compare_month = (latest_period - 6).strftime("%Y%m")
+
+    ranked = monthly.copy()
+    ranked["monthly_rank_all"] = ranked.groupby("yyyymm")["adjusted_mobility_score"].rank(
+        ascending=False,
+        method="min",
+    )
+    ranked["monthly_rank_visitor"] = np.nan
+    visitor_mask = ranked["residential_filter"] == "방문성 검토"
+    ranked.loc[visitor_mask, "monthly_rank_visitor"] = ranked.loc[visitor_mask].groupby("yyyymm")[
+        "adjusted_mobility_score"
+    ].rank(ascending=False, method="min")
+
+    def slope(values: pd.Series) -> float:
+        if len(values) < 3:
+            return 0.0
+        x = np.arange(len(values))
+        return float(np.polyfit(x, values.to_numpy(dtype=float), 1)[0])
+
+    trend = (
+        ranked.groupby(["d_admdong_cd", "d_gu_name", "d_admdong_name"], as_index=False)
+        .agg(
+            observed_months=("yyyymm", "nunique"),
+            first_month=("yyyymm", "min"),
+            latest_month=("yyyymm", "max"),
+            avg_adjusted_mobility_score=("adjusted_mobility_score", "mean"),
+            latest_adjusted_mobility_score=(
+                "adjusted_mobility_score",
+                lambda s: ranked.loc[s.index].sort_values("yyyymm").iloc[-1]["adjusted_mobility_score"],
+            ),
+            score_slope=("adjusted_mobility_score", slope),
+            avg_monthly_2030=("cnt_2030", "mean"),
+            latest_monthly_2030=(
+                "cnt_2030",
+                lambda s: ranked.loc[s.index].sort_values("yyyymm").iloc[-1]["cnt_2030"],
+            ),
+            avg_share_2030=("share_2030", "mean"),
+            latest_share_2030=(
+                "share_2030",
+                lambda s: ranked.loc[s.index].sort_values("yyyymm").iloc[-1]["share_2030"],
+            ),
+            avg_evening_2030_ratio=("evening_2030_ratio", "mean"),
+            latest_evening_2030_ratio=(
+                "evening_2030_ratio",
+                lambda s: ranked.loc[s.index].sort_values("yyyymm").iloc[-1]["evening_2030_ratio"],
+            ),
+            visitor_months=("residential_filter", lambda s: (s == "방문성 검토").sum()),
+            top20_visitor_months=("monthly_rank_visitor", lambda s: (s <= 20).sum()),
+            latest_visitor_rank=(
+                "monthly_rank_visitor",
+                lambda s: ranked.loc[s.index].sort_values("yyyymm").iloc[-1]["monthly_rank_visitor"],
+            ),
+            residential_dominance_score=("residential_dominance_score", "first"),
+            young_single_ratio=("young_single_ratio", "first"),
+            residential_filter=("residential_filter", "first"),
+        )
+    )
+
+    compare = ranked[ranked["yyyymm"].isin([compare_month, latest_month])].pivot_table(
+        index="d_admdong_cd",
+        columns="yyyymm",
+        values="adjusted_mobility_score",
+        aggfunc="first",
+    )
+    if latest_month in compare.columns and compare_month in compare.columns:
+        trend["score_change_6m"] = trend["d_admdong_cd"].map(compare[latest_month] - compare[compare_month])
+    else:
+        trend["score_change_6m"] = np.nan
+
+    trend["trend_type"] = np.select(
+        [
+            (trend["score_slope"] > 0.03) & (trend["score_change_6m"].fillna(0) > 0),
+            (trend["score_slope"] < -0.03) & (trend["score_change_6m"].fillna(0) < 0),
+        ],
+        ["상승", "하락"],
+        default="유지/변동",
+    )
+    trend["trend_candidate_score"] = (
+        zscore(trend["latest_adjusted_mobility_score"])
+        + zscore(trend["avg_adjusted_mobility_score"])
+        + zscore(trend["score_slope"])
+        + zscore(trend["top20_visitor_months"])
+        + zscore(trend["score_change_6m"].fillna(0))
+    )
+    return trend.sort_values(
+        ["trend_candidate_score", "latest_adjusted_mobility_score"],
+        ascending=False,
     )
 
 
@@ -776,6 +1024,64 @@ def write_split_candidate_reports(dest: pd.DataFrame) -> None:
     (REPORTS_DIR / "residential_dominant_2030_top20.md").write_text(residential_report, encoding="utf-8")
 
 
+def write_monthly_reports(monthly: pd.DataFrame, trend: pd.DataFrame) -> None:
+    latest_month = monthly["yyyymm"].max()
+    latest = monthly[
+        (monthly["yyyymm"] == latest_month) & (monthly["residential_filter"] == "방문성 검토")
+    ].sort_values(["adjusted_mobility_score", "mobility_score"], ascending=False)
+
+    latest_cols = [
+        "yyyymm",
+        "d_gu_name",
+        "d_admdong_name",
+        "candidate_type",
+        "adjusted_mobility_score",
+        "mobility_score",
+        "cnt_2030",
+        "share_2030",
+        "origin_diversity",
+        "evening_2030_ratio",
+        "avg_move_time_2030",
+    ]
+    trend_cols = [
+        "d_gu_name",
+        "d_admdong_name",
+        "trend_type",
+        "trend_candidate_score",
+        "latest_adjusted_mobility_score",
+        "avg_adjusted_mobility_score",
+        "score_slope",
+        "score_change_6m",
+        "top20_visitor_months",
+        "latest_monthly_2030",
+        "latest_share_2030",
+        "latest_evening_2030_ratio",
+    ]
+
+    latest_report = (
+        f"# 월별 방문 상권 후보 Top 20 - {latest_month}\n\n"
+        "2023년 1월부터 2026년 3월까지 확보 가능한 월말 생활이동 스냅샷을 사용했습니다. "
+        "아래 표는 최신 월 스냅샷에서 2030 자취/거주성 보정 후 방문성이 높게 남은 행정동입니다.\n\n"
+        f"{dataframe_to_markdown(latest.head(20)[latest_cols])}\n"
+    )
+    trend_report = (
+        "# 장기 월별 강세 후보 Top 20\n\n"
+        "월별 스냅샷 전체에서 최신 점수, 평균 점수, 점수 기울기, 최근 6개월 변화, "
+        "방문 후보 Top 20 반복 등장 횟수를 합쳐 장기 후보 점수를 계산했습니다. "
+        "현재 데이터에서는 순수 상승 후보보다 여러 달 동안 반복적으로 강한 후보가 상위에 많이 나타납니다.\n\n"
+        f"{dataframe_to_markdown(trend.head(20)[trend_cols])}\n"
+    )
+
+    (REPORTS_DIR / "monthly_visitor_candidate_latest_top20.md").write_text(
+        latest_report,
+        encoding="utf-8",
+    )
+    (REPORTS_DIR / "monthly_candidate_trend_top20.md").write_text(
+        trend_report,
+        encoding="utf-8",
+    )
+
+
 def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame, bus_stop: pd.DataFrame) -> None:
     type_counts = dest["candidate_type"].value_counts().reset_index()
     type_counts.columns = ["candidate_type", "dong_count"]
@@ -866,6 +1172,33 @@ def run_all() -> None:
     ).to_csv(residential_dominant_path, index=False, encoding="utf-8-sig")
     write_top20_report(dest)
     write_split_candidate_reports(dest)
+
+    print("3-1. Analyzing monthly 2030 living-migration snapshots...")
+    monthly = summarize_living_migration_monthly()
+    monthly = enrich_monthly_destination_summary(monthly, admin_mapping)
+    monthly = add_residential_adjustment(monthly, residential)
+    monthly["monthly_rank_all"] = monthly.groupby("yyyymm")["adjusted_mobility_score"].rank(
+        ascending=False,
+        method="min",
+    )
+    monthly["monthly_rank_visitor"] = np.nan
+    monthly_visitor_mask = monthly["residential_filter"] == "방문성 검토"
+    monthly.loc[monthly_visitor_mask, "monthly_rank_visitor"] = monthly.loc[
+        monthly_visitor_mask
+    ].groupby("yyyymm")["adjusted_mobility_score"].rank(ascending=False, method="min")
+    monthly_trend = build_monthly_candidate_trends(monthly)
+    monthly_path = PROCESSED_DIR / "monthly_living_migration_2030_summary.csv"
+    monthly_visitor_path = PROCESSED_DIR / "monthly_visitor_candidate_summary.csv"
+    monthly_trend_path = PROCESSED_DIR / "monthly_candidate_trend_summary.csv"
+    monthly.to_csv(monthly_path, index=False, encoding="utf-8-sig")
+    monthly[monthly["residential_filter"] == "방문성 검토"].to_csv(
+        monthly_visitor_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+    monthly_trend.to_csv(monthly_trend_path, index=False, encoding="utf-8-sig")
+    write_monthly_reports(monthly, monthly_trend)
+
     print("4. Creating transport support summaries and interpretation report...")
     subway_station, bus_stop, bus_hour = summarize_transport_patterns(subway, bus_summary, bus_hourly)
     subway_station_path = PROCESSED_DIR / "subway_station_summary.csv"
@@ -883,9 +1216,14 @@ def run_all() -> None:
     print(f"   saved: {visitor_path} ({(dest['residential_filter'] == '방문성 검토').sum():,} rows)")
     print(f"   saved: {residential_dominant_path} ({(dest['residential_filter'] == '2030 자취/거주성 높음').sum():,} rows)")
     print(f"   saved: {hourly_path} ({len(hourly):,} rows)")
+    print(f"   saved: {monthly_path} ({len(monthly):,} rows)")
+    print(f"   saved: {monthly_visitor_path} ({(monthly['residential_filter'] == '방문성 검토').sum():,} rows)")
+    print(f"   saved: {monthly_trend_path} ({len(monthly_trend):,} rows)")
     print(f"   saved: {REPORTS_DIR / 'living_migration_2030_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'visitor_candidate_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'residential_dominant_2030_top20.md'}")
+    print(f"   saved: {REPORTS_DIR / 'monthly_visitor_candidate_latest_top20.md'}")
+    print(f"   saved: {REPORTS_DIR / 'monthly_candidate_trend_top20.md'}")
 
     print("\nTop 10 destination administrative dongs:")
     print(
