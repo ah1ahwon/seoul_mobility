@@ -36,6 +36,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from zipfile import ZipFile
+from xml.etree import ElementTree as ET
+import re
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +56,35 @@ SUBWAY_CSV = RAW_DIR / "CARD_SUBWAY_MONTH_202604.csv"
 BUS_CSV = RAW_DIR / "bus_time_station_202604.csv"
 LIVING_MIGRATION_ZIP = RAW_DIR / "seoul_purpose_admdong4_in_20260331.zip"
 ADMIN_DONG_AREA_ZIP = RAW_DIR / "seoul_admin_dong_area.zip"
+LIVING_INTEREST_XLSX = RAW_DIR / "seoul_living_interest_groups_202512.xlsx"
+
+SEOUL_GU_CODE_TO_NAME = {
+    "11110": "종로구",
+    "11140": "중구",
+    "11170": "용산구",
+    "11200": "성동구",
+    "11215": "광진구",
+    "11230": "동대문구",
+    "11260": "중랑구",
+    "11290": "성북구",
+    "11305": "강북구",
+    "11320": "도봉구",
+    "11350": "노원구",
+    "11380": "은평구",
+    "11410": "서대문구",
+    "11440": "마포구",
+    "11470": "양천구",
+    "11500": "강서구",
+    "11530": "구로구",
+    "11545": "금천구",
+    "11560": "영등포구",
+    "11590": "동작구",
+    "11620": "관악구",
+    "11650": "서초구",
+    "11680": "강남구",
+    "11710": "송파구",
+    "11740": "강동구",
+}
 
 
 def ensure_output_dirs() -> None:
@@ -213,6 +244,118 @@ def read_admin_dong_mapping(input_path: Path = ADMIN_DONG_AREA_ZIP) -> pd.DataFr
     return mapping
 
 
+def _xlsx_col_to_idx(cell_ref: str) -> int:
+    match = re.match(r"([A-Z]+)", cell_ref)
+    if not match:
+        return 0
+    idx = 0
+    for char in match.group(1):
+        idx = idx * 26 + ord(char) - 64
+    return idx - 1
+
+
+def read_simple_xlsx(input_path: Path) -> pd.DataFrame:
+    """
+    Read the first worksheet of a simple XLSX file using only the standard library.
+
+    This project uses it to avoid requiring openpyxl for the Seoul citizen-living
+    interest-group file.
+    """
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    with ZipFile(input_path) as zf:
+        shared_strings = []
+        if "xl/sharedStrings.xml" in zf.namelist():
+            root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
+            for item in root.findall("m:si", ns):
+                shared_strings.append("".join(t.text or "" for t in item.findall(".//m:t", ns)))
+
+        rows = []
+        for _, row in ET.iterparse(zf.open("xl/worksheets/sheet1.xml"), events=("end",)):
+            if not row.tag.endswith("row"):
+                continue
+
+            values = []
+            for cell in row:
+                if not cell.tag.endswith("c"):
+                    continue
+                col_idx = _xlsx_col_to_idx(cell.attrib.get("r", "A"))
+                while len(values) <= col_idx:
+                    values.append(None)
+
+                value_node = cell.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}v")
+                if value_node is None:
+                    value = None
+                elif cell.attrib.get("t") == "s":
+                    value = shared_strings[int(value_node.text)]
+                else:
+                    value = value_node.text
+                values[col_idx] = value
+
+            rows.append(values)
+            row.clear()
+
+    headers = rows[0]
+    while headers and headers[-1] is None:
+        headers = headers[:-1]
+    width = len(headers)
+    data = [row[:width] + [None] * max(0, width - len(row)) for row in rows[1:]]
+    return pd.DataFrame(data, columns=headers)
+
+
+def summarize_young_single_households(input_path: Path = LIVING_INTEREST_XLSX) -> pd.DataFrame:
+    """
+    Build an administrative-dong residential dominance metric from Seoul citizen-living data.
+
+    Uses 20, 25, 30, 35 age buckets as the 2030 range and sums both sexes.
+    """
+    df = read_simple_xlsx(input_path)
+    df = df.rename(
+        columns={
+            "행정동코드": "living_admdong_cd",
+            "자치구": "gu_name",
+            "행정동명": "admdong_name",
+            "성별": "sex",
+            "연령대": "age_band",
+            "총인구": "population",
+            "1인가구수": "single_households",
+            "휴일 외출이 적은 집단": "low_weekend_outing_group",
+            "외출이 매우 적은 집단(전체)": "very_low_outing_group",
+        }
+    )
+
+    for col in ["age_band", "population", "single_households", "low_weekend_outing_group", "very_low_outing_group"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+
+    young = df[df["age_band"].isin([20, 25, 30, 35])].copy()
+    summary = (
+        young.groupby(["gu_name", "admdong_name"], as_index=False)
+        .agg(
+            living_admdong_cd=("living_admdong_cd", "first"),
+            young_population=("population", "sum"),
+            young_single_households=("single_households", "sum"),
+            young_low_weekend_outing_group=("low_weekend_outing_group", "sum"),
+            young_very_low_outing_group=("very_low_outing_group", "sum"),
+        )
+    )
+    summary["young_single_ratio"] = np.where(
+        summary["young_population"] > 0,
+        summary["young_single_households"] / summary["young_population"],
+        0.0,
+    )
+    summary["young_homebound_ratio"] = np.where(
+        summary["young_population"] > 0,
+        (summary["young_low_weekend_outing_group"] + summary["young_very_low_outing_group"])
+        / summary["young_population"],
+        0.0,
+    )
+    summary["residential_dominance_score"] = (
+        zscore(np.log1p(summary["young_single_households"]))
+        + zscore(summary["young_single_ratio"])
+        + 0.5 * zscore(summary["young_homebound_ratio"])
+    )
+    return summary.sort_values("residential_dominance_score", ascending=False)
+
+
 # ---------------------------------------------------------------------------
 # Living-migration analysis
 # ---------------------------------------------------------------------------
@@ -362,6 +505,9 @@ def classify_candidate(row: pd.Series, quantiles: dict[str, float]) -> str:
 def enrich_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) -> pd.DataFrame:
     enriched = dest.copy()
     enriched["d_admdong_cd"] = enriched["d_admdong_cd"].astype(str)
+    enriched = enriched[enriched["d_admdong_cd"].str.startswith("11")].copy()
+    enriched["d_gu_cd"] = enriched["d_admdong_cd"].str[:5]
+    enriched["d_gu_name"] = enriched["d_gu_cd"].map(SEOUL_GU_CODE_TO_NAME)
 
     mapping = admin_mapping.rename(
         columns={
@@ -377,6 +523,7 @@ def enrich_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) 
         on="d_admdong_cd",
         how="left",
     )
+    enriched = enriched[enriched["d_admdong_name"].notna()].copy()
 
     quantiles = {
         "cnt_2030_25": enriched["cnt_2030"].quantile(0.25),
@@ -391,6 +538,7 @@ def enrich_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) 
 
     display_cols = [
         "d_admdong_cd",
+        "d_gu_name",
         "d_admdong_name",
         "candidate_type",
         "mobility_score",
@@ -406,6 +554,69 @@ def enrich_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) 
     ]
     other_cols = [col for col in enriched.columns if col not in display_cols]
     return enriched[display_cols + other_cols]
+
+
+def add_residential_adjustment(dest: pd.DataFrame, residential: pd.DataFrame) -> pd.DataFrame:
+    enriched = dest.merge(
+        residential,
+        left_on=["d_gu_name", "d_admdong_name"],
+        right_on=["gu_name", "admdong_name"],
+        how="left",
+        suffixes=("", "_res"),
+    )
+
+    enriched["residential_match_note"] = np.where(
+        enriched["admdong_name"].isna(),
+        "미매칭",
+        "매칭",
+    )
+
+    fill_zero_cols = [
+        "young_population",
+        "young_single_households",
+        "young_low_weekend_outing_group",
+        "young_very_low_outing_group",
+        "young_single_ratio",
+        "young_homebound_ratio",
+        "residential_dominance_score",
+    ]
+    for col in fill_zero_cols:
+        if col in enriched.columns:
+            enriched[col] = pd.to_numeric(enriched[col], errors="coerce").fillna(0.0)
+
+    enriched["residential_penalty"] = enriched["residential_dominance_score"].clip(lower=0.0)
+    enriched["adjusted_mobility_score"] = enriched["mobility_score"] - 0.7 * enriched["residential_penalty"]
+    residential_threshold = enriched["residential_dominance_score"].quantile(0.75)
+    single_ratio_threshold = enriched["young_single_ratio"].quantile(0.75)
+    enriched["residential_filter"] = np.where(
+        (enriched["residential_dominance_score"] >= residential_threshold)
+        | (enriched["young_single_ratio"] >= single_ratio_threshold),
+        "2030 자취/거주성 높음",
+        "방문성 검토",
+    )
+
+    front_cols = [
+        "d_admdong_cd",
+        "d_gu_name",
+        "d_admdong_name",
+        "residential_filter",
+        "candidate_type",
+        "adjusted_mobility_score",
+        "mobility_score",
+        "residential_dominance_score",
+        "cnt_2030",
+        "share_2030",
+        "young_single_households",
+        "young_single_ratio",
+        "young_homebound_ratio",
+        "origin_diversity",
+        "evening_2030_ratio",
+        "avg_move_time_2030",
+    ]
+    other_cols = [col for col in enriched.columns if col not in front_cols]
+    return enriched[front_cols + other_cols].sort_values(
+        ["adjusted_mobility_score", "mobility_score"], ascending=False
+    )
 
 
 def summarize_transport_patterns(
@@ -473,11 +684,17 @@ def dataframe_to_markdown(df: pd.DataFrame) -> str:
 def write_top20_report(dest: pd.DataFrame) -> None:
     cols = [
         "d_admdong_cd",
+        "d_gu_name",
         "d_admdong_name",
+        "residential_filter",
         "candidate_type",
+        "adjusted_mobility_score",
         "mobility_score",
+        "residential_dominance_score",
         "cnt_2030",
         "share_2030",
+        "young_single_households",
+        "young_single_ratio",
         "origin_diversity",
         "evening_2030_ratio",
         "avg_move_time_2030",
@@ -488,24 +705,68 @@ def write_top20_report(dest: pd.DataFrame) -> None:
         "# 2030 도착 이동 상위 행정동 Top 20\n\n"
         "이 보고서는 수도권 생활이동 샘플을 기준으로 2030 도착 이동 신호가 강한 "
         "행정동을 순위화한 결과입니다.\n\n"
-        "점수 = z(log 2030 도착량) + z(2030 비중) + "
-        "z(log 출발지 다양성) + z(저녁 2030 비중).\n\n"
-        "이 점수는 최종 예측값이 아니라 후보 발굴용 1차 점수입니다.\n\n"
+        "`mobility_score`는 기존 이동 기반 점수이고, `adjusted_mobility_score`는 "
+        "2030 1인가구 거주 밀집도를 감점한 방문성 보정 점수입니다.\n\n"
+        "보정 점수 = 이동 기반 점수 - 0.7 * 2030 자취/거주성 점수.\n\n"
         f"{table}\n"
     )
     (REPORTS_DIR / "living_migration_2030_top20.md").write_text(report, encoding="utf-8")
 
 
+def write_split_candidate_reports(dest: pd.DataFrame) -> None:
+    cols = [
+        "d_gu_name",
+        "d_admdong_name",
+        "residential_filter",
+        "candidate_type",
+        "adjusted_mobility_score",
+        "mobility_score",
+        "residential_dominance_score",
+        "cnt_2030",
+        "share_2030",
+        "young_single_households",
+        "young_single_ratio",
+        "origin_diversity",
+        "evening_2030_ratio",
+        "avg_move_time_2030",
+    ]
+    visitor = dest[dest["residential_filter"] == "방문성 검토"].head(20)
+    residential = (
+        dest[dest["residential_filter"] == "2030 자취/거주성 높음"]
+        .sort_values(["residential_dominance_score", "mobility_score"], ascending=False)
+        .head(20)
+    )
+
+    visitor_report = (
+        "# 방문 상권 후보 Top 20\n\n"
+        "2030 1인가구 거주 밀집 신호가 상대적으로 낮고, 이동 기반 점수가 높은 행정동입니다.\n\n"
+        f"{dataframe_to_markdown(visitor[cols])}\n"
+    )
+    residential_report = (
+        "# 2030 자취/거주성 분리 대상 Top 20\n\n"
+        "2030 1인가구 밀집도가 높아 이동량이 상권 방문보다 생활권/거주 이동의 영향을 받을 수 있는 행정동입니다.\n\n"
+        f"{dataframe_to_markdown(residential[cols])}\n"
+    )
+    (REPORTS_DIR / "visitor_candidate_top20.md").write_text(visitor_report, encoding="utf-8")
+    (REPORTS_DIR / "residential_dominant_2030_top20.md").write_text(residential_report, encoding="utf-8")
+
+
 def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame, bus_stop: pd.DataFrame) -> None:
     type_counts = dest["candidate_type"].value_counts().reset_index()
     type_counts.columns = ["candidate_type", "dong_count"]
+    residential_counts = dest["residential_filter"].value_counts().reset_index()
+    residential_counts.columns = ["residential_filter", "dong_count"]
 
     report = (
         "# 2030 이동 기반 상권 후보 해석 보고서\n\n"
         "## 결과의 의미\n\n"
         "현재 결과는 상권 성장을 확정하는 분석이 아니라, 2030 도착 이동이 강하게 나타나는 "
-        "행정동을 먼저 걸러내는 1차 후보 발굴 결과입니다. 하루치 생활이동 샘플을 기준으로 "
-        "했기 때문에 반복 관측과 소비/점포 데이터 결합 전까지는 후보 신호로 해석해야 합니다.\n\n"
+        "행정동을 먼저 걸러내는 1차 후보 발굴 결과입니다. 이번 버전에서는 서울 시민생활 데이터의 "
+        "2030 1인가구 지표를 결합해 자취/거주성 높은 지역을 별도로 표시하고 감점했습니다.\n\n"
+        "## 2030 자취/거주성 분리 결과\n\n"
+        f"{dataframe_to_markdown(residential_counts)}\n\n"
+        "- `2030 자취/거주성 높음`: 2030 1인가구수, 1인가구 비율, 외출 적은 집단 비중이 높은 지역입니다.\n"
+        "- `방문성 검토`: 자취 밀집 신호가 상대적으로 약해 방문 상권 후보로 추가 검토할 지역입니다.\n\n"
         "## 후보 유형 분포\n\n"
         f"{dataframe_to_markdown(type_counts)}\n\n"
         "## 유형 해석\n\n"
@@ -541,6 +802,12 @@ def run_all() -> None:
     admin_mapping.to_csv(admin_mapping_path, index=False, encoding="utf-8-sig")
     print(f"   saved: {admin_mapping_path} ({len(admin_mapping):,} rows)")
 
+    print("0-1. Reading 2030 single-household residential data...")
+    residential = summarize_young_single_households()
+    residential_path = PROCESSED_DIR / "young_single_household_residential_summary.csv"
+    residential.to_csv(residential_path, index=False, encoding="utf-8-sig")
+    print(f"   saved: {residential_path} ({len(residential):,} rows)")
+
     print("1. Cleaning subway data...")
     subway = clean_subway()
     subway_path = PROCESSED_DIR / "subway_station_daily.csv"
@@ -559,11 +826,21 @@ def run_all() -> None:
     print("3. Analyzing 2030 living-migration OD data...")
     dest, hourly = summarize_living_migration()
     dest = enrich_destination_summary(dest, admin_mapping)
+    dest = add_residential_adjustment(dest, residential)
     dest_path = PROCESSED_DIR / "living_migration_2030_destination_summary.csv"
     hourly_path = PROCESSED_DIR / "living_migration_2030_destination_hourly.csv"
     dest.to_csv(dest_path, index=False, encoding="utf-8-sig")
     hourly.to_csv(hourly_path, index=False, encoding="utf-8-sig")
+    visitor_path = PROCESSED_DIR / "visitor_candidate_summary.csv"
+    residential_dominant_path = PROCESSED_DIR / "residential_dominant_2030_summary.csv"
+    dest[dest["residential_filter"] == "방문성 검토"].to_csv(
+        visitor_path, index=False, encoding="utf-8-sig"
+    )
+    dest[dest["residential_filter"] == "2030 자취/거주성 높음"].sort_values(
+        ["residential_dominance_score", "mobility_score"], ascending=False
+    ).to_csv(residential_dominant_path, index=False, encoding="utf-8-sig")
     write_top20_report(dest)
+    write_split_candidate_reports(dest)
     print("4. Creating transport support summaries and interpretation report...")
     subway_station, bus_stop, bus_hour = summarize_transport_patterns(subway, bus_summary, bus_hourly)
     subway_station_path = PROCESSED_DIR / "subway_station_summary.csv"
@@ -578,13 +855,27 @@ def run_all() -> None:
     print(f"   saved: {bus_hour_path} ({len(bus_hour):,} rows)")
     print(f"   saved: {REPORTS_DIR / 'interpretation_report.md'}")
     print(f"   saved: {dest_path} ({len(dest):,} rows)")
+    print(f"   saved: {visitor_path} ({(dest['residential_filter'] == '방문성 검토').sum():,} rows)")
+    print(f"   saved: {residential_dominant_path} ({(dest['residential_filter'] == '2030 자취/거주성 높음').sum():,} rows)")
     print(f"   saved: {hourly_path} ({len(hourly):,} rows)")
     print(f"   saved: {REPORTS_DIR / 'living_migration_2030_top20.md'}")
+    print(f"   saved: {REPORTS_DIR / 'visitor_candidate_top20.md'}")
+    print(f"   saved: {REPORTS_DIR / 'residential_dominant_2030_top20.md'}")
 
     print("\nTop 10 destination administrative dongs:")
     print(
         dest.head(10)[
-            ["d_admdong_cd", "d_admdong_name", "candidate_type", "mobility_score", "cnt_2030", "share_2030", "origin_diversity"]
+            [
+                "d_admdong_cd",
+                "d_gu_name",
+                "d_admdong_name",
+                "residential_filter",
+                "candidate_type",
+                "adjusted_mobility_score",
+                "mobility_score",
+                "young_single_ratio",
+                "cnt_2030",
+            ]
         ].to_string(index=False)
     )
 

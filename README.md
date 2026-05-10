@@ -31,6 +31,9 @@
   - 수도권 생활이동 연령별 출발-도착지 기준, 내국인 목적별, 2026년 3월 31일
 - `seoul_admin_dong_area.zip`
   - 서울시 상권분석서비스 영역-행정동, 행정동 코드/명칭 매핑용
+- `seoul_living_interest_groups_202512.xlsx`
+  - 서울 시민생활 데이터 행정동단위 10개 관심집단수, 2025년 12월
+  - 2030 1인가구 거주성 보정용
 
 ## Setup
 
@@ -53,8 +56,13 @@ python3 seoul_mobility_analysis.py
 - `output/processed/living_migration_2030_destination_hourly.csv`
 - `output/processed/subway_station_summary.csv`
 - `output/processed/bus_stop_summary.csv`
+- `output/processed/young_single_household_residential_summary.csv`
+- `output/processed/visitor_candidate_summary.csv`
+- `output/processed/residential_dominant_2030_summary.csv`
 - `output/reports/living_migration_2030_top20.md`
 - `output/reports/interpretation_report.md`
+- `output/reports/visitor_candidate_top20.md`
+- `output/reports/residential_dominant_2030_top20.md`
 
 ## Current Scoring Logic
 
@@ -67,6 +75,16 @@ mobility_score =
 + z(log 출발지 다양성)
 + z(저녁 2030 비중)
 ```
+
+`adjusted_mobility_score`는 2030 1인가구 밀집도가 높은 자취/거주성 지역을 분리하기 위한 보정 점수입니다.
+
+```text
+adjusted_mobility_score =
+  mobility_score
+- 0.7 * max(residential_dominance_score, 0)
+```
+
+`residential_dominance_score`는 서울 시민생활 데이터의 2030 1인가구수, 2030 1인가구 비율, 외출 적은 집단 비중을 조합해 계산합니다.
 
 후보 유형:
 
