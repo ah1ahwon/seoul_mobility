@@ -31,6 +31,7 @@ Important notes
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -46,7 +47,10 @@ import re
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 ARCHIVE_DIR = PROJECT_ROOT / "data_archive"
-RAW_DIR = ARCHIVE_DIR / "raw"
+
+# SEOUL_RAW_DIR env var overrides the default raw path — used in Colab/Google Drive setups
+_raw_env = os.environ.get("SEOUL_RAW_DIR")
+RAW_DIR = Path(_raw_env) if _raw_env else ARCHIVE_DIR / "raw"
 
 OUTPUT_ROOT = PROJECT_ROOT / "output"
 PROCESSED_DIR = OUTPUT_ROOT / "processed"
@@ -617,8 +621,25 @@ def summarize_living_migration_monthly(
         active_days=("etl_ymd", "nunique")
     )
 
+    # 월말 스냅샷은 하루짜리 대표일이므로 요일 효과(금요일 vs 화요일 등)나 특수 이벤트가
+    # 월별 비교에 섞일 수 있다. 요일 정보를 컬럼으로 추가해 해석 시 참고.
+    snapshot_meta = dates.groupby("yyyymm", as_index=False).agg(
+        snapshot_date_str=("etl_ymd", "first")
+    )
+    snapshot_meta["_snap_dt"] = pd.to_datetime(
+        snapshot_meta["snapshot_date_str"], format="%Y%m%d", errors="coerce"
+    )
+    snapshot_meta["snapshot_weekday"] = snapshot_meta["_snap_dt"].dt.strftime("%A")
+    snapshot_meta["is_weekend_snapshot"] = snapshot_meta["_snap_dt"].dt.dayofweek >= 5
+    snapshot_meta = snapshot_meta.drop(columns=["_snap_dt"])
+
     dest = dest.merge(origin_counts, on=["yyyymm", "d_admdong_cd"], how="left")
     dest = dest.merge(date_counts, on=["yyyymm", "d_admdong_cd"], how="left")
+    dest = dest.merge(
+        snapshot_meta[["yyyymm", "snapshot_date_str", "snapshot_weekday", "is_weekend_snapshot"]],
+        on="yyyymm",
+        how="left",
+    )
     dest["origin_diversity"] = dest["origin_diversity"].fillna(0).astype("int64")
     dest["active_days"] = dest["active_days"].fillna(0).astype("int64")
     dest["date_count"] = dest["yyyymm"].map(month_file_counts).fillna(1).astype("int64")
@@ -763,11 +784,25 @@ def add_residential_adjustment(dest: pd.DataFrame, residential: pd.DataFrame) ->
     enriched["adjusted_mobility_score"] = enriched["mobility_score"] - 0.7 * enriched["residential_penalty"]
     residential_threshold = enriched["residential_dominance_score"].quantile(0.75)
     single_ratio_threshold = enriched["young_single_ratio"].quantile(0.75)
-    enriched["residential_filter"] = np.where(
+    mobility_median = enriched["adjusted_mobility_score"].quantile(0.5)
+
+    is_high_residential = (
         (enriched["residential_dominance_score"] >= residential_threshold)
-        | (enriched["young_single_ratio"] >= single_ratio_threshold),
-        "2030 자취/거주성 높음",
-        "방문성 검토",
+        | (enriched["young_single_ratio"] >= single_ratio_threshold)
+    )
+    is_high_mobility_after_penalty = enriched["adjusted_mobility_score"] >= mobility_median
+
+    # 3단계 분류:
+    #   방문성 검토   - 거주성 신호가 약함 → 방문 상권 후보
+    #   혼재형        - 거주성·방문성이 동시에 강함 → 별도 해석 필요 (서교동, 신촌동, 역삼1동 등)
+    #   자취/거주성   - 거주성이 강하고 방문 신호가 상대적으로 약함 → 거주지 효과로 분리
+    enriched["residential_filter"] = np.select(
+        [
+            ~is_high_residential,
+            is_high_residential & is_high_mobility_after_penalty,
+        ],
+        ["방문성 검토", "혼재형 (상권+거주)"],
+        default="2030 자취/거주성 높음",
     )
 
     front_cols = [
@@ -808,7 +843,7 @@ def build_monthly_candidate_trends(monthly: pd.DataFrame) -> pd.DataFrame:
         method="min",
     )
     ranked["monthly_rank_visitor"] = np.nan
-    visitor_mask = ranked["residential_filter"] == "방문성 검토"
+    visitor_mask = ranked["residential_filter"].isin(["방문성 검토", "혼재형 (상권+거주)"])
     ranked.loc[visitor_mask, "monthly_rank_visitor"] = ranked.loc[visitor_mask].groupby("yyyymm")[
         "adjusted_mobility_score"
     ].rank(ascending=False, method="min")
@@ -1004,6 +1039,11 @@ def write_split_candidate_reports(dest: pd.DataFrame) -> None:
         "avg_move_time_2030",
     ]
     visitor = dest[dest["residential_filter"] == "방문성 검토"].head(20)
+    mixed = (
+        dest[dest["residential_filter"] == "혼재형 (상권+거주)"]
+        .sort_values(["adjusted_mobility_score", "mobility_score"], ascending=False)
+        .head(20)
+    )
     residential = (
         dest[dest["residential_filter"] == "2030 자취/거주성 높음"]
         .sort_values(["residential_dominance_score", "mobility_score"], ascending=False)
@@ -1015,19 +1055,30 @@ def write_split_candidate_reports(dest: pd.DataFrame) -> None:
         "2030 1인가구 거주 밀집 신호가 상대적으로 낮고, 이동 기반 점수가 높은 행정동입니다.\n\n"
         f"{dataframe_to_markdown(visitor[cols])}\n"
     )
+    mixed_report = (
+        "# 혼재형 (상권+거주 동시 강함) Top 20\n\n"
+        "2030 이동 기반 방문 신호와 1인가구 거주 밀집 신호가 동시에 높게 나타나는 행정동입니다. "
+        "서교동, 신촌동, 역삼1동처럼 상권성과 거주성이 공존하는 지역이 포함됩니다.\n\n"
+        "`adjusted_mobility_score`는 거주성 감점 후에도 전체 중앙값 이상을 유지했으므로 "
+        "방문 신호 자체가 강하다고 볼 수 있지만, 거주지 이동이 점수를 끌어올리는 부분도 공존합니다. "
+        "소비 데이터·점포 밀도·요일별 패턴 등 추가 정보로 성격을 분리해야 합니다.\n\n"
+        f"{dataframe_to_markdown(mixed[cols])}\n"
+    )
     residential_report = (
         "# 2030 자취/거주성 분리 대상 Top 20\n\n"
         "2030 1인가구 밀집도가 높아 이동량이 상권 방문보다 생활권/거주 이동의 영향을 받을 수 있는 행정동입니다.\n\n"
         f"{dataframe_to_markdown(residential[cols])}\n"
     )
     (REPORTS_DIR / "visitor_candidate_top20.md").write_text(visitor_report, encoding="utf-8")
+    (REPORTS_DIR / "mixed_commercial_residential_top20.md").write_text(mixed_report, encoding="utf-8")
     (REPORTS_DIR / "residential_dominant_2030_top20.md").write_text(residential_report, encoding="utf-8")
 
 
 def write_monthly_reports(monthly: pd.DataFrame, trend: pd.DataFrame) -> None:
     latest_month = monthly["yyyymm"].max()
     latest = monthly[
-        (monthly["yyyymm"] == latest_month) & (monthly["residential_filter"] == "방문성 검토")
+        (monthly["yyyymm"] == latest_month)
+        & monthly["residential_filter"].isin(["방문성 검토", "혼재형 (상권+거주)"])
     ].sort_values(["adjusted_mobility_score", "mobility_score"], ascending=False)
 
     latest_cols = [
@@ -1058,10 +1109,26 @@ def write_monthly_reports(monthly: pd.DataFrame, trend: pd.DataFrame) -> None:
         "latest_evening_2030_ratio",
     ]
 
+    weekend_months = (
+        sorted(monthly.loc[monthly["is_weekend_snapshot"].fillna(False), "yyyymm"].unique().tolist())
+        if "is_weekend_snapshot" in monthly.columns
+        else []
+    )
+    weekend_note = (
+        "\n> **주말 스냅샷 포함 월:** "
+        + ", ".join(weekend_months)
+        + " — 해당 월은 주말 이동 패턴이 반영되어 야간·여가 지역이 평일 기준 대비 "
+        "다르게 나타날 수 있습니다. 월간 비교 시 요일 차이를 고려하세요.\n"
+        if weekend_months
+        else ""
+    )
+
     latest_report = (
         f"# 월별 방문 상권 후보 Top 20 - {latest_month}\n\n"
         "2023년 1월부터 2026년 3월까지 확보 가능한 월말 생활이동 스냅샷을 사용했습니다. "
-        "아래 표는 최신 월 스냅샷에서 2030 자취/거주성 보정 후 방문성이 높게 남은 행정동입니다.\n\n"
+        "아래 표는 최신 월 스냅샷에서 2030 자취/거주성 보정 후 방문성이 높게 남은 행정동입니다. "
+        "혼재형 (상권+거주)도 방문 신호가 살아있으므로 함께 포함했습니다."
+        f"{weekend_note}\n\n"
         f"{dataframe_to_markdown(latest.head(20)[latest_cols])}\n"
     )
     trend_report = (
@@ -1111,11 +1178,40 @@ def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame
         f"{dataframe_to_markdown(subway_station.head(15)[['station_name', 'subway_total_count', 'subway_weekend_share']])}\n\n"
         "## 2026년 4월 버스 승하차 상위 정류장\n\n"
         f"{dataframe_to_markdown(bus_stop.head(15)[['station_name', 'bus_total_count', 'route_count']])}\n\n"
-        "## 현재 한계\n\n"
-        "지하철/버스 요약은 아직 행정동 공간 경계와 직접 결합하지 않았습니다. "
-        "따라서 교통 지표는 후보 행정동을 설명하는 보조 맥락으로만 사용해야 합니다. "
-        "다음 단계에서 지하철역/버스정류장 좌표를 행정동 경계와 공간 결합하면 "
-        "행정동별 교통 접근성 지표로 바꿀 수 있습니다.\n"
+        "## 혼재형 (상권+거주) 해석 지침\n\n"
+        "`혼재형 (상권+거주)`은 거주성 감점(−0.7 × residential_dominance_score) 이후에도 "
+        "`adjusted_mobility_score`가 전체 행정동 중앙값 이상을 유지한 경우입니다. "
+        "즉, 방문 신호가 거주성 효과를 어느 정도 상회할 만큼 강하지만, "
+        "거주지 이동이 점수를 일부 끌어올리는 구조가 공존합니다.\n\n"
+        "이 카테고리는 순수 방문 상권도, 순수 자취 밀집지도 아닌 **해석 보류** 구간입니다. "
+        "다음 추가 데이터로 성격을 분리해야 합니다:\n\n"
+        "- 소비 데이터(카드 매출): 실제 소비가 발생하면 방문 상권으로 분류 가능\n"
+        "- 점포 밀도: 외식·주점·문화 업종 비중이 높으면 상권성이 강한 혼재형\n"
+        "- 요일별 이동 패턴: 주말에 유입이 크게 늘면 방문 목적성 확인\n"
+        "- 이동 시작지 분포: 해당 행정동 내부 출발 비중이 높으면 거주성 효과가 크다는 신호\n\n"
+        "## 현재 데이터 한계\n\n"
+        "**1. 생활이동 월별 추세 — 월말 요일 편향**\n\n"
+        "월별 추세 분석은 각 월의 월말 대표일 하루짜리 스냅샷을 사용합니다. "
+        "해당 날짜가 금요일이면 야간·여가 이동이 과대 추정되고, "
+        "화요일이면 과소 추정될 수 있습니다. "
+        "`snapshot_weekday`, `is_weekend_snapshot` 컬럼이 이를 표시하므로 "
+        "월간 비교 시 참고하세요. 전체 일별 월간 합계가 아니라는 점도 유의해야 합니다.\n\n"
+        "**2. 지하철/버스 — 행정동 공간 결합 미완성**\n\n"
+        "현재 지하철·버스 데이터에는 역명·정류장명만 있고 좌표가 없습니다. "
+        "행정동 경계(`admin_dong_mapping`)에는 중심 좌표가 있으나 "
+        "역명-행정동 텍스트 매핑은 오류율이 높아 사용하지 않았습니다. "
+        "다음 단계: 서울 열린데이터광장의 지하철역 좌표 또는 버스정류장 좌표 파일을 추가하면 "
+        "행정동 경계와 공간 조인이 가능해 행정동별 교통 접근성 지표를 만들 수 있습니다.\n\n"
+        "**3. 소비/점포 데이터 미결합**\n\n"
+        "현재 분석은 이동량 신호만 사용합니다. "
+        "실제 상권성 확인을 위해서는 카드 매출 집계, 업종별 점포 수 등의 결합이 필요합니다. "
+        "서울 열린데이터광장의 상권분석서비스 데이터를 행정동 코드 기준으로 조인하면 "
+        "이동 신호와 실제 소비 간의 갭을 확인할 수 있습니다.\n\n"
+        "**4. 거주성 보정 설계 의도**\n\n"
+        "`adjusted_mobility_score = mobility_score - 0.7 × residential_dominance_score`는 "
+        "거주성 높은 지역을 완전히 제거하지 않고 **감점·분리**하는 장치입니다. "
+        "거주성이 높아도 방문 신호가 충분히 강하면 혼재형으로 남길 수 있어야 하기 때문입니다. "
+        "0.7 계수는 조정 가능하며, 값을 높이면 거주성 지역이 더 강하게 억제됩니다.\n"
     )
     (REPORTS_DIR / "interpretation_report.md").write_text(report, encoding="utf-8")
 
@@ -1163,10 +1259,14 @@ def run_all() -> None:
     dest.to_csv(dest_path, index=False, encoding="utf-8-sig")
     hourly.to_csv(hourly_path, index=False, encoding="utf-8-sig")
     visitor_path = PROCESSED_DIR / "visitor_candidate_summary.csv"
+    mixed_path = PROCESSED_DIR / "mixed_commercial_residential_summary.csv"
     residential_dominant_path = PROCESSED_DIR / "residential_dominant_2030_summary.csv"
     dest[dest["residential_filter"] == "방문성 검토"].to_csv(
         visitor_path, index=False, encoding="utf-8-sig"
     )
+    dest[dest["residential_filter"] == "혼재형 (상권+거주)"].sort_values(
+        ["adjusted_mobility_score", "mobility_score"], ascending=False
+    ).to_csv(mixed_path, index=False, encoding="utf-8-sig")
     dest[dest["residential_filter"] == "2030 자취/거주성 높음"].sort_values(
         ["residential_dominance_score", "mobility_score"], ascending=False
     ).to_csv(residential_dominant_path, index=False, encoding="utf-8-sig")
@@ -1182,7 +1282,7 @@ def run_all() -> None:
         method="min",
     )
     monthly["monthly_rank_visitor"] = np.nan
-    monthly_visitor_mask = monthly["residential_filter"] == "방문성 검토"
+    monthly_visitor_mask = monthly["residential_filter"].isin(["방문성 검토", "혼재형 (상권+거주)"])
     monthly.loc[monthly_visitor_mask, "monthly_rank_visitor"] = monthly.loc[
         monthly_visitor_mask
     ].groupby("yyyymm")["adjusted_mobility_score"].rank(ascending=False, method="min")
@@ -1191,7 +1291,7 @@ def run_all() -> None:
     monthly_visitor_path = PROCESSED_DIR / "monthly_visitor_candidate_summary.csv"
     monthly_trend_path = PROCESSED_DIR / "monthly_candidate_trend_summary.csv"
     monthly.to_csv(monthly_path, index=False, encoding="utf-8-sig")
-    monthly[monthly["residential_filter"] == "방문성 검토"].to_csv(
+    monthly[monthly["residential_filter"].isin(["방문성 검토", "혼재형 (상권+거주)"])].to_csv(
         monthly_visitor_path,
         index=False,
         encoding="utf-8-sig",
@@ -1214,6 +1314,7 @@ def run_all() -> None:
     print(f"   saved: {REPORTS_DIR / 'interpretation_report.md'}")
     print(f"   saved: {dest_path} ({len(dest):,} rows)")
     print(f"   saved: {visitor_path} ({(dest['residential_filter'] == '방문성 검토').sum():,} rows)")
+    print(f"   saved: {mixed_path} ({(dest['residential_filter'] == '혼재형 (상권+거주)').sum():,} rows)")
     print(f"   saved: {residential_dominant_path} ({(dest['residential_filter'] == '2030 자취/거주성 높음').sum():,} rows)")
     print(f"   saved: {hourly_path} ({len(hourly):,} rows)")
     print(f"   saved: {monthly_path} ({len(monthly):,} rows)")
@@ -1221,6 +1322,7 @@ def run_all() -> None:
     print(f"   saved: {monthly_trend_path} ({len(monthly_trend):,} rows)")
     print(f"   saved: {REPORTS_DIR / 'living_migration_2030_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'visitor_candidate_top20.md'}")
+    print(f"   saved: {REPORTS_DIR / 'mixed_commercial_residential_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'residential_dominant_2030_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'monthly_visitor_candidate_latest_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'monthly_candidate_trend_top20.md'}")
