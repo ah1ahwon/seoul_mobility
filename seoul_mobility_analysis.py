@@ -54,7 +54,7 @@ REPORTS_DIR = OUTPUT_ROOT / "reports"
 
 SUBWAY_CSV = RAW_DIR / "CARD_SUBWAY_MONTH_202604.csv"
 BUS_CSV = RAW_DIR / "bus_time_station_202604.csv"
-LIVING_MIGRATION_ZIP = RAW_DIR / "seoul_purpose_admdong4_in_20260331.zip"
+LIVING_MIGRATION_PATTERN = "seoul_purpose_admdong4_in_202603*.zip"
 ADMIN_DONG_AREA_ZIP = RAW_DIR / "seoul_admin_dong_area.zip"
 LIVING_INTEREST_XLSX = RAW_DIR / "seoul_living_interest_groups_202512.xlsx"
 
@@ -369,7 +369,7 @@ def zscore(series: pd.Series) -> pd.Series:
 
 
 def summarize_living_migration(
-    input_path: Path = LIVING_MIGRATION_ZIP,
+    input_paths: list[Path] | None = None,
     chunksize: int = 500_000,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -395,50 +395,61 @@ def summarize_living_migration(
     dest_parts = []
     hour_parts = []
     origin_parts = []
+    date_parts = []
 
-    for chunk in pd.read_csv(
-        input_path,
-        compression="zip",
-        usecols=usecols,
-        dtype={
-            "o_admdong_cd": "string",
-            "d_admdong_cd": "string",
-            "st_time_cd": "string",
-            "etl_ymd": "string",
-        },
-        chunksize=chunksize,
-    ):
-        for col in ["move_dist", "move_time", "2030_cnt", "total_cnt"]:
-            chunk[col] = pd.to_numeric(chunk[col], errors="coerce").fillna(0.0)
+    if input_paths is None:
+        input_paths = sorted(RAW_DIR.glob(LIVING_MIGRATION_PATTERN))
+    if not input_paths:
+        raise FileNotFoundError(f"No living-migration ZIP files found: {RAW_DIR / LIVING_MIGRATION_PATTERN}")
 
-        chunk["weighted_move_time_2030"] = chunk["move_time"] * chunk["2030_cnt"]
-        chunk["weighted_move_dist_2030"] = chunk["move_dist"] * chunk["2030_cnt"]
-        chunk["is_evening"] = chunk["st_time_cd"].astype(str).str.zfill(2).isin(
-            ["18", "19", "20", "21", "22", "23"]
-        )
-        chunk["evening_2030_cnt"] = np.where(chunk["is_evening"], chunk["2030_cnt"], 0.0)
+    for input_path in input_paths:
+        print(f"   reading living migration: {input_path.name}")
+        for chunk in pd.read_csv(
+            input_path,
+            compression="zip",
+            usecols=usecols,
+            dtype={
+                "o_admdong_cd": "string",
+                "d_admdong_cd": "string",
+                "st_time_cd": "string",
+                "etl_ymd": "string",
+            },
+            chunksize=chunksize,
+        ):
+            for col in ["move_dist", "move_time", "2030_cnt", "total_cnt"]:
+                chunk[col] = pd.to_numeric(chunk[col], errors="coerce").fillna(0.0)
 
-        dest_parts.append(
-            chunk.groupby("d_admdong_cd", as_index=False).agg(
-                cnt_2030=("2030_cnt", "sum"),
-                total_cnt=("total_cnt", "sum"),
-                weighted_move_time_2030=("weighted_move_time_2030", "sum"),
-                weighted_move_dist_2030=("weighted_move_dist_2030", "sum"),
-                evening_2030_cnt=("evening_2030_cnt", "sum"),
-                row_count=("d_admdong_cd", "size"),
+            chunk["weighted_move_time_2030"] = chunk["move_time"] * chunk["2030_cnt"]
+            chunk["weighted_move_dist_2030"] = chunk["move_dist"] * chunk["2030_cnt"]
+            chunk["is_evening"] = chunk["st_time_cd"].astype(str).str.zfill(2).isin(
+                ["18", "19", "20", "21", "22", "23"]
             )
-        )
+            chunk["evening_2030_cnt"] = np.where(chunk["is_evening"], chunk["2030_cnt"], 0.0)
 
-        hour_parts.append(
-            chunk.groupby(["d_admdong_cd", "st_time_cd"], as_index=False).agg(
-                cnt_2030=("2030_cnt", "sum"),
-                total_cnt=("total_cnt", "sum"),
+            dest_parts.append(
+                chunk.groupby("d_admdong_cd", as_index=False).agg(
+                    cnt_2030=("2030_cnt", "sum"),
+                    total_cnt=("total_cnt", "sum"),
+                    weighted_move_time_2030=("weighted_move_time_2030", "sum"),
+                    weighted_move_dist_2030=("weighted_move_dist_2030", "sum"),
+                    evening_2030_cnt=("evening_2030_cnt", "sum"),
+                    row_count=("d_admdong_cd", "size"),
+                )
             )
-        )
 
-        origin_parts.append(
-            chunk.loc[chunk["2030_cnt"] > 0, ["d_admdong_cd", "o_admdong_cd"]].drop_duplicates()
-        )
+            hour_parts.append(
+                chunk.groupby(["d_admdong_cd", "st_time_cd"], as_index=False).agg(
+                    cnt_2030=("2030_cnt", "sum"),
+                    total_cnt=("total_cnt", "sum"),
+                )
+            )
+
+            origin_parts.append(
+                chunk.loc[chunk["2030_cnt"] > 0, ["d_admdong_cd", "o_admdong_cd"]].drop_duplicates()
+            )
+            date_parts.append(
+                chunk.loc[chunk["2030_cnt"] > 0, ["d_admdong_cd", "etl_ymd"]].drop_duplicates()
+            )
 
     dest = pd.concat(dest_parts, ignore_index=True)
     dest = dest.groupby("d_admdong_cd", as_index=False).sum(numeric_only=True)
@@ -450,9 +461,17 @@ def summarize_living_migration(
     origin_counts = origins.groupby("d_admdong_cd", as_index=False).agg(
         origin_diversity=("o_admdong_cd", "nunique")
     )
+    dates = pd.concat(date_parts, ignore_index=True).drop_duplicates()
+    date_counts = dates.groupby("d_admdong_cd", as_index=False).agg(
+        active_days=("etl_ymd", "nunique")
+    )
 
     dest = dest.merge(origin_counts, on="d_admdong_cd", how="left")
+    dest = dest.merge(date_counts, on="d_admdong_cd", how="left")
     dest["origin_diversity"] = dest["origin_diversity"].fillna(0).astype("int64")
+    dest["active_days"] = dest["active_days"].fillna(0).astype("int64")
+    dest["date_count"] = len(input_paths)
+    dest["avg_daily_2030"] = dest["cnt_2030"] / dest["date_count"]
     dest["share_2030"] = np.where(dest["total_cnt"] > 0, dest["cnt_2030"] / dest["total_cnt"], 0.0)
     dest["avg_move_time_2030"] = np.where(
         dest["cnt_2030"] > 0,
@@ -543,6 +562,8 @@ def enrich_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) 
         "candidate_type",
         "mobility_score",
         "cnt_2030",
+        "avg_daily_2030",
+        "date_count",
         "share_2030",
         "origin_diversity",
         "evening_2030_ratio",
@@ -605,6 +626,8 @@ def add_residential_adjustment(dest: pd.DataFrame, residential: pd.DataFrame) ->
         "mobility_score",
         "residential_dominance_score",
         "cnt_2030",
+        "avg_daily_2030",
+        "date_count",
         "share_2030",
         "young_single_households",
         "young_single_ratio",
@@ -692,6 +715,8 @@ def write_top20_report(dest: pd.DataFrame) -> None:
         "mobility_score",
         "residential_dominance_score",
         "cnt_2030",
+        "avg_daily_2030",
+        "date_count",
         "share_2030",
         "young_single_households",
         "young_single_ratio",
@@ -775,7 +800,7 @@ def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame
         "- 광역 목적지형: 여러 출발지에서 비교적 긴 시간을 들여 방문하는 지역입니다. 이미 목적지성이 강한 상권/대학가/업무지구일 가능성이 큽니다.\n"
         "- 야간 소비형: 저녁 시간대 2030 유입 비중이 높은 지역입니다. 식음료, 술집, 문화, 약속 수요와 관련될 수 있습니다.\n"
         "- 소규모 2030 집중형: 전체 규모는 작지만 2030 비중이 높은 지역입니다. 초기 신호 후보로 추적할 가치가 있습니다.\n"
-        "- 관찰 필요: 하루치 이동 데이터만으로는 유형을 강하게 판단하기 어려운 지역입니다.\n\n"
+        "- 관찰 필요: 월 단위 이동 지표만으로는 유형을 강하게 판단하기 어려운 지역입니다.\n\n"
         "## 2026년 4월 지하철 승하차 상위역\n\n"
         f"{dataframe_to_markdown(subway_station.head(15)[['station_name', 'subway_total_count', 'subway_weekend_share']])}\n\n"
         "## 2026년 4월 버스 승하차 상위 정류장\n\n"
@@ -874,8 +899,10 @@ def run_all() -> None:
                 "adjusted_mobility_score",
                 "mobility_score",
                 "young_single_ratio",
-                "cnt_2030",
-            ]
+        "cnt_2030",
+        "avg_daily_2030",
+        "date_count",
+    ]
         ].to_string(index=False)
     )
 

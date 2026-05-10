@@ -15,7 +15,7 @@
 |---|---|
 | `raw/CARD_SUBWAY_MONTH_202604.csv` | 서울시 지하철호선별 역별 승하차 인원, 2026년 4월 |
 | `raw/bus_time_station_202604.csv` | 서울시 버스노선별 정류장별 시간대별 승하차 인원, 2026년 4월 |
-| `raw/seoul_purpose_admdong4_in_20260331.zip` | 수도권 생활이동 연령별 OD 목적별 내국인 데이터, 2026년 3월 31일 |
+| `raw/seoul_purpose_admdong4_in_202603*.zip` | 수도권 생활이동 연령별 OD 목적별 내국인 데이터, 2026년 3월 30개 일자 |
 | `raw/seoul_admin_dong_area.zip` | 서울시 상권분석서비스 영역-행정동, 행정동 코드 매핑용 |
 | `raw/seoul_living_interest_groups_202512.xlsx` | 서울 시민생활 데이터 행정동단위 10개 관심집단수, 2030 자취/거주성 보정용 |
 
