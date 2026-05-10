@@ -19,6 +19,20 @@
 └── README.md
 ```
 
+## 데이터 기간 및 분석 역할
+
+각 데이터의 기간과 분석에서의 역할이 다릅니다. 해석 시 기간 차이를 염두에 두세요.
+
+| 데이터 | 기간 | 역할 |
+|---|---|---|
+| 생활이동 일별 OD | 2026년 3월 (30일, 28일 제외) | **현재 시점 기준** — 후보 발굴, mobility_score, candidate_type 산출의 핵심 |
+| 생활이동 월말 스냅샷 | 2023년 1월 ~ 2026년 3월 (39개 파일) | **장기 추세** — 월별 순위, score_slope, trend_type (전체 월간 합계 아님) |
+| 지하철 승하차 | 2026년 4월 | 교통 보조 지표 (생활이동보다 한 달 뒤, 행정동 미결합) |
+| 버스 승하차 | 2026년 4월 | 교통 보조 지표 (생활이동보다 한 달 뒤, 행정동 미결합) |
+| 서울 시민생활 1인가구 | 2025년 12월 | 거주성 보정 기준 (생활이동보다 3개월 전 스냅샷) |
+
+**2026년 3월 한계**: 현재 상세 분석의 기반은 2026년 3월 30일치 일별 데이터입니다. 이후 월(4월, 5월 등)로 업데이트하려면 해당 월의 생활이동 일별 파일을 `data_archive/raw/`에 추가하고 `LIVING_MIGRATION_PATTERN`을 수정해야 합니다.
+
 ## Archived Data
 
 `data_archive/raw/`에 원천 파일을 로컬로 보관합니다. 원천 데이터는 용량이 크기 때문에 GitHub에는 올리지 않습니다.
@@ -63,6 +77,7 @@ python3 seoul_mobility_analysis.py
 - `output/processed/bus_stop_summary.csv`
 - `output/processed/young_single_household_residential_summary.csv`
 - `output/processed/visitor_candidate_summary.csv`
+- `output/processed/mixed_commercial_residential_summary.csv`
 - `output/processed/residential_dominant_2030_summary.csv`
 - `output/processed/monthly_living_migration_2030_summary.csv`
 - `output/processed/monthly_visitor_candidate_summary.csv`
@@ -70,6 +85,7 @@ python3 seoul_mobility_analysis.py
 - `output/reports/living_migration_2030_top20.md`
 - `output/reports/interpretation_report.md`
 - `output/reports/visitor_candidate_top20.md`
+- `output/reports/mixed_commercial_residential_top20.md`
 - `output/reports/residential_dominant_2030_top20.md`
 - `output/reports/monthly_visitor_candidate_latest_top20.md`
 - `output/reports/monthly_candidate_trend_top20.md`
@@ -98,7 +114,13 @@ adjusted_mobility_score =
 
 월별 분석에서는 같은 점수식을 각 월 안에서 다시 표준화합니다. 이렇게 해야 월별 전체 이동량 차이가 아니라, 해당 월 안에서 상대적으로 강한 행정동을 비교할 수 있습니다.
 
-후보 유형:
+거주성 분류 (`residential_filter`):
+
+- `방문성 검토`: 거주성 신호 약함 → 방문 상권 후보
+- `혼재형 (상권+거주)`: 거주성·방문성 동시 강함 → 별도 해석 필요 (서교동, 신촌동, 역삼1동 등)
+- `2030 자취/거주성 높음`: 거주성 강하고 방문 신호 상대적으로 약함 → 거주지 효과로 분리
+
+후보 유형 (`candidate_type`):
 
 - `핵심 후보형`
 - `광역 목적지형`
