@@ -1,3 +1,7 @@
 pandas>=2.0
 numpy>=1.24
 
+# GIS 분석 (용도지역 레이어): 선택 설치
+# pip install geopandas shapely
+# geopandas>=0.14
+# shapely>=2.0

@@ -45,6 +45,10 @@
 | `scripts/download_latest_examples.sh` | 지하철·버스·행정동·관심집단 최신 파일 샘플 다운로드 |
 | `scripts/download_living_migration_month_end.sh` | manifest 기준으로 2023-01~2026-03 월말 스냅샷 39개 다운로드 |
 | `scripts/download_living_migration_202603.sh` | manifest 기준으로 2026년 3월 일별 30개 파일 다운로드 |
+| `scripts/download_commercial_sales.sh` | 서울시 상권분석서비스 행정동별 추정매출 최신 분기 다운로드 (OA-15568) |
+| `scripts/download_living_population.sh` | 서울 생활인구 행정동별 시간대별 최신 월 다운로드 (OA-14939) |
+| `scripts/download_bjdong_mapping.sh` | 행정동 → 법정동 코드 매핑 파일 준비 안내 |
+| `scripts/download_gis_data.sh` | 서울시 행정동 경계·용도지역 shapefile 다운로드 안내 (geopandas 필요) |
 
 ## Secret Handling
 

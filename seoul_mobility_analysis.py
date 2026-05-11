@@ -67,6 +67,21 @@ LIVING_MIGRATION_MONTH_END_MANIFEST = ARCHIVE_DIR / "metadata" / "living_migrati
 ADMIN_DONG_AREA_ZIP = RAW_DIR / "seoul_admin_dong_area.zip"
 LIVING_INTEREST_XLSX = RAW_DIR / "seoul_living_interest_groups_202512.xlsx"
 
+# 법정동 매핑 (행정동코드 → 법정동코드/법정동명)
+# download_bjdong_mapping.sh 로 생성
+BJDONG_MAPPING_CSV = ARCHIVE_DIR / "metadata" / "bjdong_admdong_mapping.csv"
+
+# GIS: 서울시 용도지역지구도 + 행정동 경계 shapefile ZIP
+# 서울 열린데이터광장 / 국가공간정보포털에서 다운로드 (download_gis_data.sh)
+LAND_USE_ZIP = RAW_DIR / "seoul_land_use_zone.zip"
+ADMIN_DONG_BOUNDARY_ZIP = RAW_DIR / "seoul_admin_dong_boundary.zip"
+
+# 서울시 우리마을가게 상권분석서비스 — 행정동별 추정매출 (download_commercial_sales.sh)
+COMMERCIAL_SALES_CSV = RAW_DIR / "seoul_commercial_sales_latest.csv"
+
+# 서울 생활인구 — 행정동별 시간대별 추정 유동인구 (download_living_population.sh)
+LIVING_POPULATION_CSV = RAW_DIR / "seoul_living_population_latest.csv"
+
 SEOUL_GU_CODE_TO_NAME = {
     "11110": "종로구",
     "11140": "중구",
@@ -458,10 +473,21 @@ def summarize_living_migration(
 
             chunk["weighted_move_time_2030"] = chunk["move_time"] * chunk["2030_cnt"]
             chunk["weighted_move_dist_2030"] = chunk["move_dist"] * chunk["2030_cnt"]
-            chunk["is_evening"] = chunk["st_time_cd"].astype(str).str.zfill(2).isin(
-                ["18", "19", "20", "21", "22", "23"]
-            )
+            _hour = chunk["st_time_cd"].astype(str).str.zfill(2)
+            chunk["is_evening"] = _hour.isin(["18", "19", "20", "21", "22", "23"])
             chunk["evening_2030_cnt"] = np.where(chunk["is_evening"], chunk["2030_cnt"], 0.0)
+            chunk["morning_2030_cnt"] = np.where(_hour.isin(["06", "07", "08"]), chunk["2030_cnt"], 0.0)
+            chunk["afternoon_2030_cnt"] = np.where(
+                _hour.isin([f"{h:02d}" for h in range(9, 18)]), chunk["2030_cnt"], 0.0
+            )
+            chunk["late_night_2030_cnt"] = np.where(
+                _hour.isin(["23", "00", "01", "02", "03", "04", "05"]), chunk["2030_cnt"], 0.0
+            )
+            _etl_dt = pd.to_datetime(chunk["etl_ymd"].astype(str), format="%Y%m%d", errors="coerce")
+            _wday = _etl_dt.dt.dayofweek  # 0=Mon, 6=Sun
+            chunk["weekday_2030_cnt"] = np.where(_wday <= 3, chunk["2030_cnt"], 0.0)  # Mon-Thu
+            chunk["friday_2030_cnt"] = np.where(_wday == 4, chunk["2030_cnt"], 0.0)
+            chunk["weekend_2030_cnt"] = np.where(_wday >= 5, chunk["2030_cnt"], 0.0)
 
             dest_parts.append(
                 chunk.groupby("d_admdong_cd", as_index=False).agg(
@@ -470,6 +496,12 @@ def summarize_living_migration(
                     weighted_move_time_2030=("weighted_move_time_2030", "sum"),
                     weighted_move_dist_2030=("weighted_move_dist_2030", "sum"),
                     evening_2030_cnt=("evening_2030_cnt", "sum"),
+                    morning_2030_cnt=("morning_2030_cnt", "sum"),
+                    afternoon_2030_cnt=("afternoon_2030_cnt", "sum"),
+                    late_night_2030_cnt=("late_night_2030_cnt", "sum"),
+                    weekday_2030_cnt=("weekday_2030_cnt", "sum"),
+                    friday_2030_cnt=("friday_2030_cnt", "sum"),
+                    weekend_2030_cnt=("weekend_2030_cnt", "sum"),
                     row_count=("d_admdong_cd", "size"),
                 )
             )
@@ -525,6 +557,15 @@ def summarize_living_migration(
         dest["evening_2030_cnt"] / dest["cnt_2030"],
         0.0,
     )
+    for _ratio, _cnt in [
+        ("morning_2030_ratio", "morning_2030_cnt"),
+        ("afternoon_2030_ratio", "afternoon_2030_cnt"),
+        ("late_night_2030_ratio", "late_night_2030_cnt"),
+        ("weekday_2030_ratio", "weekday_2030_cnt"),
+        ("friday_2030_ratio", "friday_2030_cnt"),
+        ("weekend_2030_ratio", "weekend_2030_cnt"),
+    ]:
+        dest[_ratio] = np.where(dest["cnt_2030"] > 0, dest[_cnt] / dest["cnt_2030"], 0.0)
 
     dest["mobility_score"] = (
         zscore(np.log1p(dest["cnt_2030"]))
@@ -753,6 +794,12 @@ def enrich_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) 
         "share_2030",
         "origin_diversity",
         "evening_2030_ratio",
+        "morning_2030_ratio",
+        "afternoon_2030_ratio",
+        "late_night_2030_ratio",
+        "weekday_2030_ratio",
+        "friday_2030_ratio",
+        "weekend_2030_ratio",
         "avg_move_time_2030",
         "avg_move_dist_2030",
         "total_cnt",
@@ -761,6 +808,452 @@ def enrich_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) 
     ]
     other_cols = [col for col in enriched.columns if col not in display_cols]
     return enriched[display_cols + other_cols]
+
+
+def classify_visit_pattern(dest: pd.DataFrame) -> pd.Series:
+    """
+    요일·시간대 비율로 2030 방문 패턴을 분류.
+
+    목적 방문형: 주말 비중 상위 40% + 저녁/심야 집중 → 약속·여가·소비 목적 방문
+    생활 밀착형: 평일(월~목) 비중 상위 40% + 주말 신호 약함 → 주거 생활권 이동
+    복합형: 목적 방문·생활 이동 신호 동시에 강함 → 상권성·거주성 공존
+    불명확: 분류 근거 불충분
+    """
+    if "weekend_2030_ratio" not in dest.columns:
+        return pd.Series("불명확", index=dest.index)
+
+    weekend_th = dest["weekend_2030_ratio"].quantile(0.60)
+    weekday_th = dest["weekday_2030_ratio"].quantile(0.60)
+    evening_th = dest["evening_2030_ratio"].quantile(0.60)
+    late_night_th = dest["late_night_2030_ratio"].quantile(0.60)
+
+    is_weekend_heavy = dest["weekend_2030_ratio"] >= weekend_th
+    is_weekday_heavy = dest["weekday_2030_ratio"] >= weekday_th
+    is_evening_heavy = (
+        (dest["evening_2030_ratio"] >= evening_th)
+        | (dest["late_night_2030_ratio"] >= late_night_th)
+    )
+
+    return pd.Series(
+        np.select(
+            [
+                is_weekend_heavy & is_evening_heavy,   # 주말·저녁/심야 집중
+                is_weekday_heavy & ~is_weekend_heavy,   # 평일 중심, 주말 약함
+                is_weekend_heavy & is_weekday_heavy,    # 양쪽 모두 강함
+            ],
+            ["목적 방문형", "생활 밀착형", "복합형"],
+            default="불명확",
+        ),
+        index=dest.index,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 법정동 집계
+# ---------------------------------------------------------------------------
+
+def _infer_bjdong_name(admdong_name: str) -> str:
+    """
+    행정동명 끝의 번호 접미사를 제거해 법정동명을 근사 추정.
+    예: '잠실6동' → '잠실동', '성수2가3동' → '성수2가동'
+    공식 매핑 파일(BJDONG_MAPPING_CSV)이 있으면 load_bjdong_mapping()을 사용할 것.
+    """
+    return re.sub(r"(\d+)동$", "동", admdong_name)
+
+
+def load_bjdong_mapping(
+    mapping_path: Path = BJDONG_MAPPING_CSV,
+) -> pd.DataFrame | None:
+    """
+    행정동코드 → 법정동코드/법정동명 매핑 CSV 로드.
+
+    CSV 컬럼 형식: admdong_cd, bjdong_cd, bjdong_nm
+    파일이 없으면 None 반환 → _infer_bjdong_name 근사치 사용.
+
+    다운로드: bash data_archive/scripts/download_bjdong_mapping.sh
+    출처: 행정안전부 행정동-법정동 코드 대응표
+    """
+    if not mapping_path.exists():
+        print(f"   법정동 매핑 없음 ({mapping_path.name}) — 이름 패턴 근사치 사용")
+        return None
+    df = pd.read_csv(mapping_path, dtype={"admdong_cd": "string", "bjdong_cd": "string"})
+    required = {"admdong_cd", "bjdong_cd", "bjdong_nm"}
+    if not required.issubset(df.columns):
+        print(f"   법정동 매핑 컬럼 부족 — 이름 패턴 근사치 사용")
+        return None
+    return df
+
+
+def aggregate_to_bjdong(
+    dest: pd.DataFrame,
+    bjdong_map: pd.DataFrame | None,
+) -> pd.DataFrame:
+    """
+    행정동 단위 분석 결과를 법정동(洞) 단위로 집계.
+
+    스코어/비율: 평균, cnt 계열: 합계로 처리.
+    candidate_type / visit_pattern_type: 최빈값으로 대표.
+    """
+    df = dest.copy()
+    df["d_admdong_cd"] = df["d_admdong_cd"].astype(str)
+
+    if bjdong_map is not None:
+        df = df.merge(
+            bjdong_map.rename(columns={"admdong_cd": "d_admdong_cd"}),
+            on="d_admdong_cd",
+            how="left",
+        )
+        df["bjdong_cd"] = df["bjdong_cd"].fillna(df["d_admdong_cd"])
+        df["bjdong_nm"] = df["bjdong_nm"].fillna(df["d_admdong_name"].apply(_infer_bjdong_name))
+    else:
+        df["bjdong_nm"] = df["d_admdong_name"].apply(_infer_bjdong_name)
+        df["bjdong_cd"] = df["d_admdong_cd"]
+
+    sum_cols = [c for c in df.columns if c.endswith("_cnt") or c == "total_cnt"]
+    score_cols = [c for c in df.columns if c.endswith("_score") or c.endswith("_ratio")]
+    key_cols = ["d_gu_name", "bjdong_cd", "bjdong_nm"]
+
+    agg_dict: dict = {c: "sum" for c in sum_cols if c in df.columns}
+    agg_dict.update({c: "mean" for c in score_cols if c in df.columns})
+    agg_dict.update({c: "first" for c in key_cols if c in df.columns})
+    for cat_col in ["candidate_type", "visit_pattern_type", "residential_filter"]:
+        if cat_col in df.columns:
+            agg_dict[cat_col] = lambda s: s.value_counts().index[0] if len(s) > 0 else "불명확"
+
+    result = df.groupby("bjdong_nm", as_index=False).agg(agg_dict)
+    sort_col = "commercial_potential_score" if "commercial_potential_score" in result.columns else "adjusted_mobility_score"
+    if sort_col in result.columns:
+        result = result.sort_values(sort_col, ascending=False)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# GIS 용도지역 분석 (geopandas 선택적 의존)
+# ---------------------------------------------------------------------------
+
+def summarize_land_use_by_dong(
+    land_use_path: Path = LAND_USE_ZIP,
+    admin_dong_path: Path = ADMIN_DONG_BOUNDARY_ZIP,
+) -> pd.DataFrame:
+    """
+    행정동별 용도지역(상업·주거·준주거·공업·녹지) 면적 비율 계산.
+
+    필요 파일
+    ----------
+    LAND_USE_ZIP: 서울시 도시계획 용도지역지구도 shapefile ZIP
+        서울시 도시공간정보서비스 또는 국토교통부 VWORLD
+    ADMIN_DONG_BOUNDARY_ZIP: 서울시 행정동 경계 shapefile ZIP
+        국가공간정보포털(ngii.go.kr) 또는 SGIS(sgis.kostat.go.kr)
+
+    다운로드: bash data_archive/scripts/download_gis_data.sh
+
+    반환 컬럼
+    ----------
+    d_admdong_cd, commercial_zone_ratio, residential_zone_ratio,
+    semi_residential_zone_ratio, industrial_zone_ratio, green_zone_ratio
+    """
+    if not land_use_path.exists():
+        print(f"   용도지역 파일 없음 ({land_use_path.name}) — GIS 분석 건너뜀")
+        return pd.DataFrame()
+    if not admin_dong_path.exists():
+        print(f"   행정동 경계 파일 없음 ({admin_dong_path.name}) — GIS 분석 건너뜀")
+        return pd.DataFrame()
+    try:
+        import geopandas as gpd
+    except ImportError:
+        print("   geopandas 미설치 — GIS 분석 건너뜀 (pip install geopandas)")
+        return pd.DataFrame()
+
+    print("   행정동 경계 로드...")
+    dongs = gpd.read_file(f"zip://{admin_dong_path}")
+    print("   용도지역 로드...")
+    land_use = gpd.read_file(f"zip://{land_use_path}")
+    land_use = land_use.to_crs(dongs.crs)
+
+    cd_col = next(
+        (c for c in dongs.columns if any(k in c.lower() for k in ["adm", "emd", "dong_cd", "hjdong"])),
+        None,
+    )
+    zone_col = next(
+        (c for c in land_use.columns if any(k in c for k in ["용도", "UNAME", "zone"])),
+        None,
+    )
+    if cd_col is None or zone_col is None:
+        print(f"   컬럼 탐지 실패 (dong={cd_col}, zone={zone_col}) — GIS 분석 건너뜀")
+        return pd.DataFrame()
+
+    print("   공간 교차 분석 중 (시간 소요)...")
+    inter = gpd.overlay(
+        dongs[[cd_col, "geometry"]].rename(columns={cd_col: "admdong_cd"}),
+        land_use[[zone_col, "geometry"]].rename(columns={zone_col: "zone_type"}),
+        how="intersection",
+        keep_geom_type=True,
+    )
+    inter["area_m2"] = inter.geometry.area
+
+    def _classify_zone(name: str) -> str:
+        if not isinstance(name, str):
+            return "기타"
+        if "상업" in name:
+            return "commercial"
+        if "준주거" in name:
+            return "semi_residential"
+        if "주거" in name:
+            return "residential"
+        if "공업" in name or "준공업" in name:
+            return "industrial"
+        if "녹지" in name:
+            return "green"
+        return "기타"
+
+    inter["zone_class"] = inter["zone_type"].apply(_classify_zone)
+    dong_total = inter.groupby("admdong_cd")["area_m2"].sum()
+    pivot = (
+        inter.groupby(["admdong_cd", "zone_class"])["area_m2"]
+        .sum()
+        .unstack(fill_value=0.0)
+    )
+    for cls in ["commercial", "residential", "semi_residential", "industrial", "green"]:
+        if cls not in pivot.columns:
+            pivot[cls] = 0.0
+    pivot = pivot.div(dong_total, axis=0).fillna(0.0)
+    result = pivot[["commercial", "residential", "semi_residential", "industrial", "green"]].rename(
+        columns={
+            "commercial": "commercial_zone_ratio",
+            "residential": "residential_zone_ratio",
+            "semi_residential": "semi_residential_zone_ratio",
+            "industrial": "industrial_zone_ratio",
+            "green": "green_zone_ratio",
+        }
+    ).reset_index().rename(columns={"admdong_cd": "d_admdong_cd"})
+    result["d_admdong_cd"] = result["d_admdong_cd"].astype(str)
+    print(f"   용도지역 분석 완료: {len(result)}개 행정동")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 매출 데이터 (서울시 우리마을가게 상권분석서비스)
+# ---------------------------------------------------------------------------
+
+def summarize_sales_by_dong(
+    input_path: Path = COMMERCIAL_SALES_CSV,
+) -> pd.DataFrame:
+    """
+    서울시 우리마을가게 상권분석서비스 행정동별 추정매출 집계.
+
+    필요 파일: COMMERCIAL_SALES_CSV
+    다운로드: bash data_archive/scripts/download_commercial_sales.sh
+    출처: 서울 열린데이터광장 OA-15568
+          https://data.seoul.go.kr/dataList/OA-15568/S/1/datasetView.do
+
+    반환 컬럼: d_admdong_cd, total_sales, total_stores, sales_per_store,
+              food_sales_ratio (음식/주점/카페 매출 비중)
+    """
+    if not input_path.exists():
+        print(f"   매출 데이터 없음 ({input_path.name}) — 건너뜀")
+        print(f"   활성화: bash data_archive/scripts/download_commercial_sales.sh")
+        return pd.DataFrame()
+
+    df = pd.read_csv(input_path, encoding="utf-8-sig", low_memory=False)
+    col_map = {
+        "행정동_코드": "admdong_cd",
+        "행정동_코드_명": "admdong_name",
+        "서비스_업종_코드_명": "industry_name",
+        "당월_매출_금액": "monthly_sales",
+        "당월_매출_건수": "monthly_txn",
+        "점포수": "store_count",
+    }
+    df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+    for col in ["monthly_sales", "monthly_txn", "store_count"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+
+    summary = df.groupby("admdong_cd", as_index=False).agg(
+        total_sales=("monthly_sales", "sum"),
+        total_stores=("store_count", "sum"),
+        total_txn=("monthly_txn", "sum"),
+    )
+    if "industry_name" in df.columns:
+        food_kw = ["음식", "식음료", "주점", "카페", "음료"]
+        food_mask = df["industry_name"].str.contains("|".join(food_kw), na=False)
+        food_sales = df[food_mask].groupby("admdong_cd")["monthly_sales"].sum().reset_index()
+        food_sales.columns = ["admdong_cd", "food_sales"]
+        summary = summary.merge(food_sales, on="admdong_cd", how="left")
+        summary["food_sales"] = summary["food_sales"].fillna(0.0)
+        summary["food_sales_ratio"] = np.where(
+            summary["total_sales"] > 0, summary["food_sales"] / summary["total_sales"], 0.0
+        )
+    else:
+        summary["food_sales_ratio"] = 0.0
+
+    summary["sales_per_store"] = np.where(
+        summary["total_stores"] > 0, summary["total_sales"] / summary["total_stores"], 0.0
+    )
+    summary = summary.rename(columns={"admdong_cd": "d_admdong_cd"})
+    summary["d_admdong_cd"] = summary["d_admdong_cd"].astype(str)
+    print(f"   매출 집계 완료: {len(summary)}개 행정동")
+    return summary
+
+
+# ---------------------------------------------------------------------------
+# 유동인구 vs 상주인구 (서울 생활인구 OA-14939)
+# ---------------------------------------------------------------------------
+
+def summarize_population_ratio(
+    input_path: Path = LIVING_POPULATION_CSV,
+) -> pd.DataFrame:
+    """
+    서울 생활인구에서 낮(9-18시) / 심야(22-6시) 2030 생활인구를 집계해
+    유동인구 유입 비율(daytime_influx_ratio) 계산.
+
+    필요 파일: LIVING_POPULATION_CSV
+    다운로드: bash data_archive/scripts/download_living_population.sh
+    출처: 서울 열린데이터광장 OA-14939
+          https://data.seoul.go.kr/dataList/OA-14939/S/1/datasetView.do
+
+    daytime_influx_ratio = 낮 2030 평균 / 심야 2030 평균
+    > 1이면 낮에 외부에서 유입되는 인구가 거주자보다 많음 (유동인구 강세)
+    """
+    if not input_path.exists():
+        print(f"   생활인구 데이터 없음 ({input_path.name}) — 건너뜀")
+        print(f"   활성화: bash data_archive/scripts/download_living_population.sh")
+        return pd.DataFrame()
+
+    parts = []
+    for chunk in pd.read_csv(input_path, encoding="utf-8-sig", chunksize=500_000, low_memory=False):
+        col_map = {
+            "행정동코드": "admdong_cd",
+            "시간대구분": "time_slot",
+            "20대생활인구수": "pop_20s",
+            "30대생활인구수": "pop_30s",
+        }
+        chunk = chunk.rename(columns={k: v for k, v in col_map.items() if k in chunk.columns})
+        for col in ["pop_20s", "pop_30s"]:
+            if col in chunk.columns:
+                chunk[col] = pd.to_numeric(chunk[col], errors="coerce").fillna(0.0)
+
+        if "pop_20s" in chunk.columns and "pop_30s" in chunk.columns:
+            chunk["pop_2030"] = chunk["pop_20s"] + chunk["pop_30s"]
+        else:
+            continue
+
+        if "time_slot" in chunk.columns:
+            ts = pd.to_numeric(chunk["time_slot"], errors="coerce")
+            chunk["is_daytime"] = ts.between(9, 18)
+            chunk["is_nighttime"] = (ts <= 6) | (ts >= 22)
+        else:
+            chunk["is_daytime"] = True
+            chunk["is_nighttime"] = False
+
+        parts.append(
+            chunk.groupby("admdong_cd", as_index=False).agg(
+                daytime_pop_2030=("pop_2030", lambda s: s[chunk.loc[s.index, "is_daytime"]].mean()),
+                nighttime_pop_2030=("pop_2030", lambda s: s[chunk.loc[s.index, "is_nighttime"]].mean()),
+            )
+        )
+
+    if not parts:
+        return pd.DataFrame()
+
+    result = pd.concat(parts, ignore_index=True)
+    result = result.groupby("admdong_cd", as_index=False).mean(numeric_only=True)
+    result["daytime_influx_ratio"] = np.where(
+        result["nighttime_pop_2030"] > 0,
+        result["daytime_pop_2030"] / result["nighttime_pop_2030"],
+        1.0,
+    )
+    result = result.rename(columns={"admdong_cd": "d_admdong_cd"})
+    result["d_admdong_cd"] = result["d_admdong_cd"].astype(str)
+    print(f"   생활인구 집계 완료: {len(result)}개 행정동")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 통합 상권 잠재력 점수
+# ---------------------------------------------------------------------------
+
+def add_commercial_potential_score(
+    dest: pd.DataFrame,
+    land_use: pd.DataFrame | None = None,
+    sales: pd.DataFrame | None = None,
+    pop_ratio: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """
+    adjusted_mobility_score에 용도지역·매출·유동인구·방문패턴을 결합해
+    commercial_potential_score(상권 잠재력 점수)를 계산.
+
+    데이터가 없는 요소는 z-score = 0으로 처리(영향 없음).
+
+    점수 구성
+    ---------
+    + adjusted_mobility_score          (이동·거주성 보정)
+    + 0.5 * z(commercial_zone_ratio)   (상업지역 비율: 실제 상권 입지)
+    + 0.7 * z(log1p(total_sales))      (매출 발생: 단순 통행이 아닌 소비 확인)
+    + 0.4 * z(daytime_influx_ratio)    (유동인구 유입: 상주 대비 방문자 강세)
+    + visit_bonus (목적방문형+0.5, 복합형+0.2) (요일 패턴 보정)
+    - 0.3 * z(residential_zone_ratio)  (순 주거지역 비율: 상권 적합성 감점)
+    """
+    df = dest.copy()
+
+    # 용도지역 결합
+    if land_use is not None and not land_use.empty:
+        lu = land_use.copy()
+        if "d_admdong_cd" not in lu.columns and "admdong_cd" in lu.columns:
+            lu = lu.rename(columns={"admdong_cd": "d_admdong_cd"})
+        df = df.merge(lu, on="d_admdong_cd", how="left")
+    for col in ["commercial_zone_ratio", "residential_zone_ratio"]:
+        if col not in df.columns:
+            df[col] = 0.0
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+
+    # 매출 결합
+    if sales is not None and not sales.empty:
+        sl = sales.copy()
+        if "d_admdong_cd" not in sl.columns and "admdong_cd" in sl.columns:
+            sl = sl.rename(columns={"admdong_cd": "d_admdong_cd"})
+        df = df.merge(sl, on="d_admdong_cd", how="left")
+    for col in ["total_sales", "sales_per_store", "food_sales_ratio"]:
+        if col not in df.columns:
+            df[col] = 0.0
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+
+    # 유동인구 결합
+    if pop_ratio is not None and not pop_ratio.empty:
+        pr = pop_ratio.copy()
+        if "d_admdong_cd" not in pr.columns and "admdong_cd" in pr.columns:
+            pr = pr.rename(columns={"admdong_cd": "d_admdong_cd"})
+        df = df.merge(pr, on="d_admdong_cd", how="left")
+    if "daytime_influx_ratio" not in df.columns:
+        df["daytime_influx_ratio"] = 1.0
+    df["daytime_influx_ratio"] = pd.to_numeric(df["daytime_influx_ratio"], errors="coerce").fillna(1.0)
+
+    # 방문 패턴 가산점
+    visit_bonus = pd.Series(0.0, index=df.index)
+    if "visit_pattern_type" in df.columns:
+        visit_bonus = df["visit_pattern_type"].map(
+            {"목적 방문형": 0.5, "복합형": 0.2, "생활 밀착형": 0.0, "불명확": 0.0}
+        ).fillna(0.0)
+
+    def _safe_zscore(series: pd.Series) -> pd.Series:
+        std = series.std(ddof=0)
+        if std == 0 or pd.isna(std):
+            return pd.Series(0.0, index=series.index)
+        return (series - series.mean()) / std
+
+    z_commercial = _safe_zscore(df["commercial_zone_ratio"])
+    z_sales = _safe_zscore(np.log1p(df["total_sales"]))
+    z_influx = _safe_zscore(df["daytime_influx_ratio"])
+    z_res_zone = _safe_zscore(df["residential_zone_ratio"])
+
+    df["commercial_potential_score"] = (
+        df["adjusted_mobility_score"]
+        + 0.5 * z_commercial
+        + 0.7 * z_sales
+        + 0.4 * z_influx
+        + visit_bonus
+        - 0.3 * z_res_zone
+    )
+    return df.sort_values("commercial_potential_score", ascending=False)
 
 
 def enrich_monthly_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) -> pd.DataFrame:
@@ -1272,6 +1765,48 @@ def run_all() -> None:
     dest, hourly = summarize_living_migration()
     dest = enrich_destination_summary(dest, admin_mapping)
     dest = add_residential_adjustment(dest, residential)
+
+    print("3-2. Classifying visit patterns (weekday/time breakdown)...")
+    dest["visit_pattern_type"] = classify_visit_pattern(dest)
+    visit_pattern_counts = dest["visit_pattern_type"].value_counts()
+    print(f"   목적 방문형: {visit_pattern_counts.get('목적 방문형', 0)}, "
+          f"생활 밀착형: {visit_pattern_counts.get('생활 밀착형', 0)}, "
+          f"복합형: {visit_pattern_counts.get('복합형', 0)}, "
+          f"불명확: {visit_pattern_counts.get('불명확', 0)}")
+
+    print("3-3. Loading optional enrichment data (GIS / sales / population)...")
+    land_use_df = summarize_land_use_by_dong()
+    sales_df = summarize_sales_by_dong()
+    pop_ratio_df = summarize_population_ratio()
+
+    print("3-4. Computing commercial_potential_score...")
+    dest = add_commercial_potential_score(
+        dest,
+        land_use_df if not land_use_df.empty else None,
+        sales_df if not sales_df.empty else None,
+        pop_ratio_df if not pop_ratio_df.empty else None,
+    )
+
+    print("3-5. Aggregating to 법정동(洞) unit...")
+    bjdong_map = load_bjdong_mapping()
+    bjdong_summary = aggregate_to_bjdong(dest, bjdong_map)
+    bjdong_path = PROCESSED_DIR / "bjdong_candidate_summary.csv"
+    bjdong_summary.to_csv(bjdong_path, index=False, encoding="utf-8-sig")
+    print(f"   saved: {bjdong_path} ({len(bjdong_summary):,} 법정동)")
+
+    if not land_use_df.empty:
+        lu_path = PROCESSED_DIR / "land_use_by_dong.csv"
+        land_use_df.to_csv(lu_path, index=False, encoding="utf-8-sig")
+        print(f"   saved: {lu_path} ({len(land_use_df):,} rows)")
+    if not sales_df.empty:
+        sl_path = PROCESSED_DIR / "sales_by_dong.csv"
+        sales_df.to_csv(sl_path, index=False, encoding="utf-8-sig")
+        print(f"   saved: {sl_path} ({len(sales_df):,} rows)")
+    if not pop_ratio_df.empty:
+        pr_path = PROCESSED_DIR / "population_ratio_by_dong.csv"
+        pop_ratio_df.to_csv(pr_path, index=False, encoding="utf-8-sig")
+        print(f"   saved: {pr_path} ({len(pop_ratio_df):,} rows)")
+
     dest_path = PROCESSED_DIR / "living_migration_2030_destination_summary.csv"
     hourly_path = PROCESSED_DIR / "living_migration_2030_destination_hourly.csv"
     dest.to_csv(dest_path, index=False, encoding="utf-8-sig")
@@ -1288,6 +1823,26 @@ def run_all() -> None:
     dest[dest["residential_filter"] == "2030 자취/거주성 높음"].sort_values(
         ["residential_dominance_score", "mobility_score"], ascending=False
     ).to_csv(residential_dominant_path, index=False, encoding="utf-8-sig")
+
+    # 법정동 Top 20 보고서
+    bjdong_report_cols = [
+        c for c in [
+            "bjdong_nm", "d_gu_name", "visit_pattern_type", "residential_filter", "candidate_type",
+            "commercial_potential_score", "adjusted_mobility_score", "cnt_2030",
+            "weekend_2030_ratio", "evening_2030_ratio", "late_night_2030_ratio",
+            "food_sales_ratio", "daytime_influx_ratio", "commercial_zone_ratio",
+        ]
+        if c in bjdong_summary.columns
+    ]
+    bjdong_report = (
+        "# 법정동(洞) 단위 상권 잠재력 Top 20\n\n"
+        "행정동 단위 분석 결과를 법정동 단위로 집계하고, "
+        "용도지역·매출·유동인구·방문패턴을 결합한 `commercial_potential_score` 기준 순위입니다. "
+        "GIS·매출·생활인구 데이터가 없으면 이동 신호(`adjusted_mobility_score`)만 반영됩니다.\n\n"
+        f"{dataframe_to_markdown(bjdong_summary.head(20)[bjdong_report_cols])}\n"
+    )
+    (REPORTS_DIR / "bjdong_commercial_candidate_top20.md").write_text(bjdong_report, encoding="utf-8")
+
     write_top20_report(dest)
     write_split_candidate_reports(dest)
 
