@@ -6,15 +6,18 @@
 
 ```text
 .
-├── seoul_mobility_analysis.py
+├── seoul_mobility_analysis.py      # 분석 스크립트 (로컬/Colab 공통)
+├── Seoul_Mobility_Full_Pipeline.ipynb  # Colab 전체 파이프라인 (다운로드 → 분석 → 시각화 → push)
+├── Seoul_Mobility_Colab.ipynb      # Colab 단순 연결용 (Drive에 데이터 미리 준비 후 실행)
+├── ANALYSIS_FLOW.md                # 분석 방법론 상세 문서
 ├── data_archive/
-│   ├── raw/
-│   ├── metadata/
-│   ├── notes/
-│   └── scripts/
+│   ├── raw/                        # 원천 파일 (gitignore 대상, 로컬/Drive 보관)
+│   ├── metadata/                   # manifest CSV, 데이터셋 페이지 HTML
+│   ├── notes/                      # 데이터 해석 주의사항
+│   └── scripts/                    # 서울 열린데이터광장 재다운로드 스크립트
 ├── output/
-│   ├── processed/
-│   └── reports/
+│   ├── processed/                  # 전처리/집계 CSV
+│   └── reports/                    # Top 20 순위 및 해석 보고서 .md
 ├── requirements.txt
 └── README.md
 ```
@@ -78,7 +81,30 @@ python3 seoul_mobility_analysis.py
 
 ### Google Colab 실행
 
-`Seoul_Mobility_Colab.ipynb` 또는 `Seoul_Mobility_Full_Pipeline.ipynb`을 Colab에서 열어 실행합니다.
+두 가지 Colab 노트북이 있습니다.
+
+#### `Seoul_Mobility_Full_Pipeline.ipynb` (권장)
+
+데이터 다운로드부터 분석·시각화·GitHub push까지 한 번에 실행하는 완전 자동화 파이프라인입니다.
+
+1. Google Drive 마운트
+2. GitHub에서 최신 코드 clone/pull
+3. 서울 열린데이터광장에서 직접 데이터 다운로드 (약 3 GB, 72개 파일) → Drive 저장
+4. 불량 ZIP 파일 자동 감지·삭제
+5. `seoul_mobility_analysis.py` 실행
+6. 7개 시각화 차트 생성
+
+아래 URL에서 직접 열 수 있습니다.
+
+```
+https://colab.research.google.com/github/ah1ahwon/seoul_mobility/blob/main/Seoul_Mobility_Full_Pipeline.ipynb
+```
+
+내부적으로 `SEOUL_RAW_DIR`과 `SEOUL_OUTPUT_DIR`을 Drive 경로로 설정합니다.
+
+#### `Seoul_Mobility_Colab.ipynb` (단순 연결)
+
+Drive에 데이터를 미리 준비해 둔 경우 분석 스크립트만 실행합니다.
 
 ```python
 import os
@@ -88,7 +114,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 !python3 /content/seoul_mobility/seoul_mobility_analysis.py
 ```
 
-Drive에 마운트된 경로를 `SEOUL_OUTPUT_DIR`로 지정하면 결과가 Drive에 직접 저장됩니다. 분석 완료 후 `commit_outputs()`가 자동 실행되어 output 하위 파일을 git 커밋하고 원격 저장소에 push합니다.
+분석 완료 후 `commit_outputs()`가 자동 실행되어 `output/` 하위 파일을 git 커밋하고 원격 저장소에 push합니다. `SEOUL_OUTPUT_DIR`이 repo 밖(Drive 경로)이면 git 스테이징 대상에서 벗어날 수 있으므로, 버전 관리가 필요하면 remote가 설정되어 있어야 합니다.
 
 생성 결과는 `output/` 아래에 저장됩니다.
 
@@ -153,9 +179,9 @@ adjusted_mobility_score =
 
 거주성 분류 (`residential_filter`):
 
-- `방문성 검토`: 거주성 신호 약함 → 방문 상권 후보
-- `혼재형 (상권+거주)`: 거주성·방문성 동시 강함 → 별도 해석 필요 (서교동, 신촌동, 역삼1동 등)
-- `2030 자취/거주성 높음`: 거주성 강하고 방문 신호 상대적으로 약함 → 거주지 효과로 분리
+- `방문성 검토`: 거주성 신호 약함 → 방문 상권 후보 (현재 데이터: 305개 동)
+- `혼재형 (상권+거주)`: 거주성 감점 후에도 `adjusted_mobility_score`가 전체 중앙값 이상 → 방문·거주 신호 공존. 현재 데이터에서는 거주성 감점(-0.7 × score)이 충분히 커 고거주성 동이 전부 중앙값 이하로 내려가므로 0개로 집계됨. 데이터나 계수 조정 시 나타날 수 있음.
+- `2030 자취/거주성 높음`: 거주성 강하고 방문 신호 상대적으로 약함 → 거주지 효과로 분리 (현재 데이터: 117개 동, 예: 신림동, 화양동, 안암동)
 
 후보 유형 (`candidate_type`):
 

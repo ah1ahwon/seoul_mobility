@@ -24,7 +24,9 @@
 
 | File | Description |
 |---|---|
-| `metadata/living_migration_month_end_manifest.csv` | 월말 스냅샷 아카이브 목록 (yyyymm, filename 컬럼). 스크립트가 이 목록을 기준으로 파일을 로드함 |
+| `metadata/living_migration_month_end_manifest.csv` | 월말 스냅샷 아카이브 목록 (yyyymm, filename, seq 컬럼). 2023-01~2026-03, 39개 파일. `download_living_migration_month_end.sh`와 분석 스크립트가 이 목록을 기준으로 파일을 로드함 |
+| `metadata/living_migration_202603_manifest.csv` | 2026년 3월 일별 파일 목록 (filename, seq 컬럼). 30개 일자(28일 제외). `download_living_migration_202603.sh`에서 참조 |
+| `metadata/source_inventory.csv` | 전체 데이터 소스 인벤토리 (infId, 데이터셋명, 용도 등) |
 
 ## Sources
 
@@ -34,6 +36,15 @@
 - 상권분석서비스 영역-행정동: https://data.seoul.go.kr/dataList/OA-22160/S/1/datasetView.do
 - 서울 시민생활 데이터: https://data.seoul.go.kr/dataVisual/seoul/seoulLiving.do
 - 행정동단위 10개 관심집단수: https://data.seoul.go.kr/dataList/OA-22266/F/1/datasetView.do
+
+## Scripts
+
+| Script | Description |
+|---|---|
+| `scripts/download_seoul_bigdata_file.sh` | 서울 열린데이터광장 단일 파일 다운로드 공통 함수 |
+| `scripts/download_latest_examples.sh` | 지하철·버스·행정동·관심집단 최신 파일 샘플 다운로드 |
+| `scripts/download_living_migration_month_end.sh` | manifest 기준으로 2023-01~2026-03 월말 스냅샷 39개 다운로드 |
+| `scripts/download_living_migration_202603.sh` | manifest 기준으로 2026년 3월 일별 30개 파일 다운로드 |
 
 ## Secret Handling
 
