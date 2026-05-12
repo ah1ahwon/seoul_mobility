@@ -87,33 +87,42 @@ LIVING_POPULATION_CSV = RAW_DIR / "seoul_living_population_latest.csv"
 SUBWAY_STATION_COORD_CSV = RAW_DIR / "subway_station_coordinates.csv"
 BUS_STOP_COORD_CSV = RAW_DIR / "bus_stop_coordinates.csv"
 
-SEOUL_GU_CODE_TO_NAME = {
-    "11110": "종로구",
-    "11140": "중구",
-    "11170": "용산구",
-    "11200": "성동구",
-    "11215": "광진구",
-    "11230": "동대문구",
-    "11260": "중랑구",
-    "11290": "성북구",
-    "11305": "강북구",
-    "11320": "도봉구",
-    "11350": "노원구",
-    "11380": "은평구",
-    "11410": "서대문구",
-    "11440": "마포구",
-    "11470": "양천구",
-    "11500": "강서구",
-    "11530": "구로구",
-    "11545": "금천구",
-    "11560": "영등포구",
-    "11590": "동작구",
-    "11620": "관악구",
-    "11650": "서초구",
-    "11680": "강남구",
-    "11710": "송파구",
-    "11740": "강동구",
-}
+ADMDONG_CODE_CSV = ARCHIVE_DIR / "metadata" / "seoul_admdong_code.csv"
+
+
+def _load_admdong_codes() -> tuple[dict[str, str], dict[str, str]]:
+    """
+    Load gu and dong code→name mappings from seoul_admdong_code.csv.
+
+    Returns (gu_code_to_name, admdong_code_to_info) where:
+      gu_code_to_name  : 5-digit gu code  → gu name  (e.g. "11110" → "종로구")
+      admdong_code_to_info : 8-digit dong code → (gu_name, dong_name)
+    """
+    if not ADMDONG_CODE_CSV.exists():
+        raise FileNotFoundError(
+            f"행정동 코드 CSV 없음: {ADMDONG_CODE_CSV}\n"
+            "   data_archive/metadata/seoul_admdong_code.csv 를 준비하세요."
+        )
+    df = pd.read_csv(ADMDONG_CODE_CSV, dtype=str, encoding="utf-8-sig")
+    df["행정동코드"] = df["행정동코드"].str.strip()
+
+    gu_rows = df[df["시군구명"].notna() & (df["시군구명"] != "") &
+                 (df["읍면동명"].isna() | (df["읍면동명"] == ""))]
+    gu_code_to_name: dict[str, str] = {
+        row["행정동코드"][:5]: row["시군구명"]
+        for _, row in gu_rows.iterrows()
+    }
+
+    dong_rows = df[df["읍면동명"].notna() & (df["읍면동명"] != "")]
+    admdong_code_to_info: dict[str, tuple[str, str]] = {
+        row["행정동코드"][:8]: (row["시군구명"], row["읍면동명"])
+        for _, row in dong_rows.iterrows()
+    }
+
+    return gu_code_to_name, admdong_code_to_info
+
+
+SEOUL_GU_CODE_TO_NAME, SEOUL_ADMDONG_CODE_TO_INFO = _load_admdong_codes()
 
 
 def ensure_output_dirs() -> None:
