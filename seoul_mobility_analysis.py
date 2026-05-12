@@ -83,7 +83,7 @@ COMMERCIAL_SALES_CSV = RAW_DIR / "seoul_commercial_sales_latest.csv"
 # 서울 생활인구 — 행정동별 시간대별 추정 유동인구 (download_living_population.sh)
 LIVING_POPULATION_CSV = RAW_DIR / "seoul_living_population_latest.csv"
 
-# 선택 좌표 파일: 있으면 행정동 경계와 공간 결합해 교통 접근성 지표 생성
+# 필수 좌표 파일: 행정동 경계와 공간 결합해 교통 접근성 지표 생성
 SUBWAY_STATION_COORD_CSV = RAW_DIR / "subway_station_coordinates.csv"
 BUS_STOP_COORD_CSV = RAW_DIR / "bus_stop_coordinates.csv"
 
@@ -119,6 +119,24 @@ SEOUL_GU_CODE_TO_NAME = {
 def ensure_output_dirs() -> None:
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def allow_partial_run() -> bool:
+    """Return True only for development runs that intentionally allow missing required layers."""
+    return os.environ.get("SEOUL_ALLOW_PARTIAL") == "1"
+
+
+def require_input(path: Path, label: str, hint: str = "") -> bool:
+    """Require an input file unless SEOUL_ALLOW_PARTIAL=1 is explicitly set."""
+    if path.exists():
+        return True
+    message = f"{label} 파일 없음: {path}"
+    if hint:
+        message += f"\n   준비 방법: {hint}"
+    if allow_partial_run():
+        print(f"   {message} — SEOUL_ALLOW_PARTIAL=1 이므로 건너뜀")
+        return False
+    raise FileNotFoundError(message)
 
 
 # ---------------------------------------------------------------------------
@@ -914,19 +932,26 @@ def load_bjdong_mapping(
     행정동코드 → 법정동코드/법정동명 매핑 CSV 로드.
 
     CSV 컬럼 형식: admdong_cd, bjdong_cd, bjdong_nm
-    파일이 없으면 None 반환 → _infer_bjdong_name 근사치 사용.
+    파일이 없으면 기본 실행에서는 실패. SEOUL_ALLOW_PARTIAL=1이면 이름 패턴 근사치 사용.
 
     다운로드: bash data_archive/scripts/download_bjdong_mapping.sh
     출처: 행정안전부 행정동-법정동 코드 대응표
     """
     if not mapping_path.exists():
-        print(f"   법정동 매핑 없음 ({mapping_path.name}) — 이름 패턴 근사치 사용")
-        return None
+        if allow_partial_run():
+            print(f"   법정동 매핑 없음 ({mapping_path.name}) — SEOUL_ALLOW_PARTIAL=1 이므로 이름 패턴 근사치 사용")
+            return None
+        raise FileNotFoundError(
+            f"법정동 매핑 파일 없음: {mapping_path}\n"
+            "   준비 방법: bash data_archive/scripts/download_bjdong_mapping.sh"
+        )
     df = pd.read_csv(mapping_path, dtype={"admdong_cd": "string", "bjdong_cd": "string"})
     required = {"admdong_cd", "bjdong_cd", "bjdong_nm"}
     if not required.issubset(df.columns):
-        print(f"   법정동 매핑 컬럼 부족 — 이름 패턴 근사치 사용")
-        return None
+        if allow_partial_run():
+            print(f"   법정동 매핑 컬럼 부족 — SEOUL_ALLOW_PARTIAL=1 이므로 이름 패턴 근사치 사용")
+            return None
+        raise ValueError(f"법정동 매핑 컬럼 부족: 필요 컬럼 {sorted(required)}")
     return df
 
 
@@ -975,7 +1000,7 @@ def aggregate_to_bjdong(
 
 
 # ---------------------------------------------------------------------------
-# GIS 용도지역 분석 (geopandas 선택적 의존)
+# GIS 용도지역 분석 (필수 레이어, geopandas 필요)
 # ---------------------------------------------------------------------------
 
 def summarize_land_use_by_dong(
@@ -999,17 +1024,17 @@ def summarize_land_use_by_dong(
     d_admdong_cd, commercial_zone_ratio, residential_zone_ratio,
     semi_residential_zone_ratio, industrial_zone_ratio, green_zone_ratio
     """
-    if not land_use_path.exists():
-        print(f"   용도지역 파일 없음 ({land_use_path.name}) — GIS 분석 건너뜀")
+    if not require_input(land_use_path, "용도지역", "bash data_archive/scripts/download_gis_data.sh"):
         return pd.DataFrame()
-    if not admin_dong_path.exists():
-        print(f"   행정동 경계 파일 없음 ({admin_dong_path.name}) — GIS 분석 건너뜀")
+    if not require_input(admin_dong_path, "행정동 경계", "bash data_archive/scripts/download_gis_data.sh"):
         return pd.DataFrame()
     try:
         import geopandas as gpd
     except ImportError:
-        print("   geopandas 미설치 — GIS 분석 건너뜀 (pip install geopandas)")
-        return pd.DataFrame()
+        if allow_partial_run():
+            print("   geopandas 미설치 — SEOUL_ALLOW_PARTIAL=1 이므로 GIS 분석 건너뜀 (pip install geopandas)")
+            return pd.DataFrame()
+        raise ImportError("geopandas 미설치: pip install geopandas shapely")
 
     print("   행정동 경계 로드...")
     dongs = gpd.read_file(f"zip://{admin_dong_path}")
@@ -1026,8 +1051,10 @@ def summarize_land_use_by_dong(
         None,
     )
     if cd_col is None or zone_col is None:
-        print(f"   컬럼 탐지 실패 (dong={cd_col}, zone={zone_col}) — GIS 분석 건너뜀")
-        return pd.DataFrame()
+        if allow_partial_run():
+            print(f"   컬럼 탐지 실패 (dong={cd_col}, zone={zone_col}) — SEOUL_ALLOW_PARTIAL=1 이므로 GIS 분석 건너뜀")
+            return pd.DataFrame()
+        raise ValueError(f"GIS 컬럼 탐지 실패 (dong={cd_col}, zone={zone_col})")
 
     print("   공간 교차 분석 중 (시간 소요)...")
     inter = gpd.overlay(
@@ -1096,9 +1123,7 @@ def summarize_sales_by_dong(
     반환 컬럼: d_admdong_cd, total_sales, total_stores, sales_per_store,
               food_sales_ratio (음식/주점/카페 매출 비중)
     """
-    if not input_path.exists():
-        print(f"   매출 데이터 없음 ({input_path.name}) — 건너뜀")
-        print(f"   활성화: bash data_archive/scripts/download_commercial_sales.sh")
+    if not require_input(input_path, "매출 데이터", "bash data_archive/scripts/download_commercial_sales.sh"):
         return pd.DataFrame()
 
     df = pd.read_csv(input_path, encoding="utf-8-sig", low_memory=False)
@@ -1161,9 +1186,7 @@ def summarize_population_ratio(
     daytime_influx_ratio = 낮 2030 평균 / 심야 2030 평균
     > 1이면 낮에 외부에서 유입되는 인구가 거주자보다 많음 (유동인구 강세)
     """
-    if not input_path.exists():
-        print(f"   생활인구 데이터 없음 ({input_path.name}) — 건너뜀")
-        print(f"   활성화: bash data_archive/scripts/download_living_population.sh")
+    if not require_input(input_path, "생활인구 데이터", "bash data_archive/scripts/download_living_population.sh"):
         return pd.DataFrame()
 
     parts = []
@@ -1569,23 +1592,25 @@ def summarize_transport_access_by_dong(
     bus_coord_path: Path = BUS_STOP_COORD_CSV,
 ) -> pd.DataFrame:
     """
-    Spatially join optional station/stop coordinate files to admin-dong boundaries.
+    Spatially join required station/stop coordinate files to admin-dong boundaries.
 
-    Expected optional files:
+    Expected files:
       - subway_station_coordinates.csv: station_name, longitude/latitude or x/y
       - bus_stop_coordinates.csv: station_id or ars_id or station_name, longitude/latitude or x/y
     """
-    if not admin_dong_path.exists():
-        print(f"   행정동 경계 파일 없음 ({admin_dong_path.name}) — 교통 접근성 공간 결합 건너뜀")
+    if not require_input(admin_dong_path, "행정동 경계", "bash data_archive/scripts/download_gis_data.sh"):
         return pd.DataFrame()
-    if not subway_coord_path.exists() and not bus_coord_path.exists():
-        print("   역/정류장 좌표 파일 없음 — 교통 접근성 공간 결합 건너뜀")
+    if not require_input(subway_coord_path, "지하철역 좌표", "raw/subway_station_coordinates.csv 준비"):
+        return pd.DataFrame()
+    if not require_input(bus_coord_path, "버스정류장 좌표", "raw/bus_stop_coordinates.csv 준비"):
         return pd.DataFrame()
     try:
         import geopandas as gpd
     except ImportError:
-        print("   geopandas 미설치 — 교통 접근성 공간 결합 건너뜀 (pip install geopandas)")
-        return pd.DataFrame()
+        if allow_partial_run():
+            print("   geopandas 미설치 — SEOUL_ALLOW_PARTIAL=1 이므로 교통 접근성 공간 결합 건너뜀")
+            return pd.DataFrame()
+        raise ImportError("geopandas 미설치: pip install geopandas shapely")
 
     dongs = gpd.read_file(f"zip://{admin_dong_path}")
     cd_col = next(
@@ -1593,8 +1618,10 @@ def summarize_transport_access_by_dong(
         None,
     )
     if cd_col is None:
-        print("   행정동 코드 컬럼 탐지 실패 — 교통 접근성 공간 결합 건너뜀")
-        return pd.DataFrame()
+        if allow_partial_run():
+            print("   행정동 코드 컬럼 탐지 실패 — SEOUL_ALLOW_PARTIAL=1 이므로 교통 접근성 공간 결합 건너뜀")
+            return pd.DataFrame()
+        raise ValueError("행정동 경계 파일에서 행정동 코드 컬럼을 찾지 못했습니다.")
     dongs = dongs[[cd_col, "geometry"]].rename(columns={cd_col: "d_admdong_cd"})
 
     parts = []
@@ -1976,9 +2003,9 @@ def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame
         "월간 비교 시 참고하세요. 전체 일별 월간 합계가 아니라는 점도 유의해야 합니다.\n\n"
         "**2. 지하철/버스 — 행정동 공간 결합**\n\n"
         "기본 지하철·버스 데이터에는 역명·정류장명만 있고 좌표가 없습니다. "
-        "`seoul_admin_dong_boundary.zip`과 선택 좌표 파일(`subway_station_coordinates.csv`, "
+        "`seoul_admin_dong_boundary.zip`과 좌표 파일(`subway_station_coordinates.csv`, "
         "`bus_stop_coordinates.csv`)이 있으면 공간 조인으로 `transport_access_by_dong.csv`를 생성합니다. "
-        "좌표 파일이 없으면 기존처럼 역·정류장 단위 보조지표만 사용합니다.\n\n"
+        "기본 실행에서는 이 파일들이 필수이며, 누락 시 분석을 중단합니다.\n\n"
         "**3. 소비/점포 데이터 미결합**\n\n"
         "현재 분석은 이동량 신호만 사용합니다. "
         "실제 상권성 확인을 위해서는 카드 매출 집계, 업종별 점포 수 등의 결합이 필요합니다. "
@@ -2040,7 +2067,7 @@ def run_all() -> None:
           f"복합형: {visit_pattern_counts.get('복합형', 0)}, "
           f"불명확: {visit_pattern_counts.get('불명확', 0)}")
 
-    print("3-3. Loading optional enrichment data (GIS / sales / population)...")
+    print("3-3. Loading required enrichment data (GIS / sales / population)...")
     land_use_df = summarize_land_use_by_dong()
     sales_df = summarize_sales_by_dong()
     pop_ratio_df = summarize_population_ratio()
@@ -2109,7 +2136,7 @@ def run_all() -> None:
         "# 법정동(洞) 단위 상권 잠재력 Top 20\n\n"
         "행정동 단위 분석 결과를 법정동 단위로 집계하고, "
         "용도지역·매출·유동인구·방문패턴을 결합한 `commercial_potential_score` 기준 순위입니다. "
-        "GIS·매출·생활인구 데이터가 없으면 이동 신호(`adjusted_mobility_score`)만 반영됩니다.\n\n"
+        "GIS·매출·생활인구 데이터를 모두 결합한 `commercial_potential_score` 기준 순위입니다.\n\n"
         f"{dataframe_to_markdown(bjdong_summary.head(20)[bjdong_report_cols])}\n"
     )
     (REPORTS_DIR / "bjdong_commercial_candidate_top20.md").write_text(bjdong_report, encoding="utf-8")

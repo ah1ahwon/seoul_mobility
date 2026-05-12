@@ -209,7 +209,7 @@ https://data.seoul.go.kr/dataList/OA-12914/S/1/datasetView.do
 - 현재 지하철 데이터는 행정동과 공간 결합하지 않았다.
 - 따라서 후보 행정동을 설명하는 보조 맥락으로만 사용한다.
 
-### 2.5 서울시 상권분석서비스 행정동별 추정매출 (선택)
+### 2.5 서울시 상권분석서비스 행정동별 추정매출
 
 파일:
 
@@ -238,10 +238,10 @@ https://data.seoul.go.kr/dataList/OA-15568/S/1/datasetView.do
 
 비고:
 
-- 파일이 없으면 해당 요소를 건너뛰고 나머지 점수만으로 계산한다.
+- 파일이 없으면 기본 실행에서는 분석을 중단한다.
 - 다운로드: `bash data_archive/scripts/download_commercial_sales.sh`
 
-### 2.6 서울 생활인구 (내국인) 행정동별 시간대별 (선택)
+### 2.6 서울 생활인구 (내국인) 행정동별 시간대별
 
 파일:
 
@@ -264,10 +264,10 @@ https://data.seoul.go.kr/dataList/OA-14939/S/1/datasetView.do
 비고:
 
 - 월 1~2 GB 규모의 대용량 파일이다.
-- 파일이 없으면 해당 요소를 중립값으로 대체한다.
+- 파일이 없으면 기본 실행에서는 분석을 중단한다.
 - 다운로드: `bash data_archive/scripts/download_living_population.sh`
 
-### 2.7 서울시 행정동 경계 + 도시계획 용도지역지구도 shapefile (선택)
+### 2.7 서울시 행정동 경계 + 도시계획 용도지역지구도 shapefile
 
 파일:
 
@@ -291,10 +291,10 @@ data_archive/raw/seoul_land_use_zone.zip         ← 용도지역지구도
 비고:
 
 - `geopandas>=0.14`, `shapely>=2.0` 설치 필요: `pip install geopandas shapely`
-- 파일 또는 패키지가 없으면 건너뛰고 나머지 요소만으로 점수 계산한다.
+- 파일 또는 패키지가 없으면 기본 실행에서는 분석을 중단한다.
 - 안내: `bash data_archive/scripts/download_gis_data.sh`
 
-### 2.8 행정동 → 법정동 코드 매핑 (선택)
+### 2.8 행정동 → 법정동 코드 매핑
 
 파일:
 
@@ -306,7 +306,7 @@ data_archive/metadata/bjdong_admdong_mapping.csv
 
 비고:
 
-- 파일이 없으면 행정동명에서 숫자 접미사를 제거하는 패턴 근사치를 사용한다.
+- 파일이 없으면 기본 실행에서는 분석을 중단한다. 개발용 부분 실행(`SEOUL_ALLOW_PARTIAL=1`)에서만 행정동명 패턴 근사치를 사용한다.
   - 예: `잠실6동` → `잠실동`, `성수2가3동` → `성수2가동`
 - 행정안전부/통계청 코드 대응표에서 준비: `bash data_archive/scripts/download_bjdong_mapping.sh`
 
@@ -492,9 +492,9 @@ mobility_score =
 | `복합형` | 주말 비중 높음 AND 평일 비중 높음 |
 | `불명확` | 위 조건에 해당하지 않음 |
 
-### Step 3-3. 선택적 레이어 데이터 로드
+### Step 3-3. 필수 레이어 데이터 로드
 
-다음 세 함수는 각 선택 데이터 파일이 존재할 때만 결과를 반환하고, 없으면 빈 DataFrame을 반환한다.
+다음 함수들은 필수 데이터 파일을 로드한다. 기본 실행에서는 파일이나 패키지가 없으면 분석을 중단한다.
 
 | 함수 | 입력 파일 | 출력 컬럼 |
 |---|---|---|
@@ -504,19 +504,19 @@ mobility_score =
 
 ### Step 3-4. 상권 잠재력 복합 점수 (commercial_potential_score)
 
-`add_commercial_potential_score()` 함수가 이동 점수와 선택적 레이어를 결합한 복합 점수를 생성한다.
+`add_commercial_potential_score()` 함수가 이동 점수와 필수 레이어를 결합한 복합 점수를 생성한다.
 
 ```text
 commercial_potential_score =
   adjusted_mobility_score
-+ 0.5 × z(commercial_zone_ratio)        ← GIS 용도지역 레이어 (선택)
-+ 0.7 × z(log1p(total_sales))           ← 매출 데이터 (선택)
-+ 0.4 × z(daytime_influx_ratio)         ← 생활인구 비율 (선택)
++ 0.5 × z(commercial_zone_ratio)        ← GIS 용도지역 레이어
++ 0.7 × z(log1p(total_sales))           ← 매출 데이터
++ 0.4 × z(daytime_influx_ratio)         ← 생활인구 비율
 + visit_bonus                            ← 목적 방문형 +0.5, 복합형 +0.2
-− 0.3 × z(residential_zone_ratio)       ← GIS 주거지역 패널티 (선택)
+− 0.3 × z(residential_zone_ratio)       ← GIS 주거지역 패널티
 ```
 
-선택적 레이어가 없으면 해당 항목의 z-score는 0으로 처리한다.
+필수 레이어가 없으면 기본 실행에서는 점수를 계산하지 않고 중단한다. 개발용 부분 실행(`SEOUL_ALLOW_PARTIAL=1`)에서만 해당 항목을 제외한다.
 
 ### Step 3-5. 법정동 단위 집계
 
@@ -524,7 +524,7 @@ commercial_potential_score =
 
 법정동 매핑 우선순위:
 1. `data_archive/metadata/bjdong_admdong_mapping.csv` 파일이 있으면 공식 코드 매핑 사용
-2. 없으면 행정동명 패턴 근사치 사용: 숫자 접미사 제거 (`잠실6동` → `잠실동`)
+2. 개발용 부분 실행(`SEOUL_ALLOW_PARTIAL=1`)에서만 행정동명 패턴 근사치 사용: 숫자 접미사 제거 (`잠실6동` → `잠실동`)
 
 집계 방식:
 - `cnt_2030`, `cnt_total` 등 이동량 컬럼: 합산
@@ -538,7 +538,7 @@ output/processed/bjdong_candidate_summary.csv
 output/reports/bjdong_commercial_candidate_top20.md
 ```
 
-현재 패턴 근사치 기준: 657개 행정동 → 248개 법정동
+법정동 매핑은 공식 매핑 파일 기준으로 수행한다. 개발용 부분 실행(`SEOUL_ALLOW_PARTIAL=1`)에서만 패턴 근사치를 사용할 수 있다.
 
 Top 5 법정동 (commercial_potential_score 기준):
 
@@ -726,7 +726,7 @@ output/processed/bjdong_candidate_summary.csv
 output/reports/bjdong_commercial_candidate_top20.md
 ```
 
-행정동 결과를 법정동 단위로 재집계한 결과다. `commercial_potential_score` 기준으로 정렬되며, GIS/매출/생활인구 데이터가 있을수록 점수가 더 정교해진다. 선택적 데이터 없이 이동 데이터만으로도 생성된다.
+행정동 결과를 법정동 단위로 재집계한 결과다. `commercial_potential_score` 기준으로 정렬되며, GIS/매출/생활인구 데이터가 모두 있어야 `commercial_potential_score`를 최종 기준으로 해석한다.
 
 #### 방문 패턴 분류 현황
 
@@ -770,11 +770,11 @@ output/reports/candidate_explanation_report.md
 
 - 생활이동 데이터는 2026년 3월 30개 일자 샘플이다. 3월 28일 파일은 원천 목록에 없어 제외되었다.
 - 월별 추세 분석은 2023년 1월~2026년 3월 월말 대표일 39개 파일을 사용한다. 전체 일별 월간 합계가 아니므로 특정 월말 이벤트나 요일 효과가 섞일 수 있다. 보유한 모든 일별 ZIP을 월별로 묶는 확장 산출물도 함께 생성하며, 날짜 범위 다운로드 스크립트로 각 월의 커버리지를 높일 수 있다.
-- 지하철/버스 행정동 공간 결합은 선택 좌표 파일과 행정동 경계 파일이 있을 때 수행된다. 파일이 없으면 기존 역·정류장 단위 보조지표만 생성한다.
-- `commercial_potential_score`는 선택적 데이터(GIS/매출/생활인구)가 모두 없을 때 이동 지표만으로 계산되므로 용도지역·매출 차이가 반영되지 않는다.
+- 지하철/버스 행정동 공간 결합에는 행정동 경계와 역·정류장 좌표 파일이 필요하다. 기본 실행에서는 누락 시 분석을 중단한다.
+- `commercial_potential_score`는 GIS/매출/생활인구 필수 레이어를 모두 결합한 최종 후보 점수다.
 - 2030 자취/거주성 보정은 완전 제거가 아니라 감점/분리 장치다.
 - `혼재형 (상권+거주)` 카테고리는 방문 신호와 거주성 신호가 함께 강한 구간이므로, 순수 방문 상권으로 바로 해석하지 않는다.
-- 법정동 매핑 파일이 없을 때 사용하는 패턴 근사치(`잠실6동` → `잠실동`)는 복잡한 이름 규칙을 완전히 처리하지 못한다. 공식 매핑 파일을 준비하면 정확도가 높아진다.
+- 법정동 매핑은 공식 매핑 파일이 필수다. 개발용 부분 실행의 패턴 근사치는 복잡한 이름 규칙을 완전히 처리하지 못하므로 최종 해석에 사용하지 않는다.
 
 ## 6. 다음 단계
 
@@ -789,19 +789,19 @@ output/reports/candidate_explanation_report.md
 - [x] 생활인구 유동/상주 비율 구현 (`summarize_population_ratio`)
 - [x] `commercial_potential_score` 복합 점수 생성
 - [x] 법정동 단위 집계 (`aggregate_to_bjdong`)
-- [x] 선택적 데이터 로더와 파이프라인 검증
+- [x] 필수 데이터 로더와 파이프라인 검증
   - 매출: `bash data_archive/scripts/download_commercial_sales.sh`
   - 생활인구: `bash data_archive/scripts/download_living_population.sh`
   - 법정동 매핑: `bash data_archive/scripts/download_bjdong_mapping.sh`
   - GIS: `bash data_archive/scripts/download_gis_data.sh` + `pip install geopandas shapely`
-  - 파일이 없거나 패키지가 없으면 해당 레이어를 건너뛰고 이동 데이터 기준으로 계속 실행
+  - 파일이 없거나 패키지가 없으면 기본 실행에서는 중단하고, `SEOUL_ALLOW_PARTIAL=1`일 때만 개발용 부분 실행 허용
 - [x] 보유한 모든 생활이동 일별 ZIP을 월별로 묶는 확장 산출물 생성 (`monthly_living_migration_all_available_summary.csv`)
 - [x] 날짜 범위별 생활이동 일별 ZIP 다운로드 스크립트 추가 (`download_living_migration_daily_range.sh`)
-- [x] 역·정류장 좌표와 행정동 경계의 선택적 공간 결합 구조 구현 (`transport_access_by_dong.csv`)
+- [x] 역·정류장 좌표와 행정동 경계의 필수 공간 결합 구조 구현 (`transport_access_by_dong.csv`)
 - [x] 후보 지역별 자동 설명 리포트 생성 (`candidate_explanation_report.md`)
 
 ### 운영상 확인 항목
 
 - 매출·생활인구 다운로드 스크립트의 `seq`는 서울 열린데이터광장 원천 페이지에서 최신 파일 기준으로 바뀔 수 있다.
-- `seoul_admin_dong_boundary.zip`, `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`가 없으면 교통 접근성 공간 결합은 건너뛴다.
+- `seoul_admin_dong_boundary.zip`, `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`가 없으면 기본 실행에서는 분석을 중단한다.
 - 월별 전체 일별 집계를 완전히 만들려면 `download_living_migration_daily_range.sh`로 각 월의 모든 일별 생활이동 ZIP을 추가 확보하고, `coverage_ratio`가 1에 가까운지 확인해야 한다.
