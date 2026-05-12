@@ -19,6 +19,11 @@
 | `raw/seoul_purpose_admdong4_in_YYYYMMDD.zip` | 수도권 생활이동 월말 스냅샷, 2023년 1월~2026년 3월 39개 파일 (장기 추세 분석용) |
 | `raw/seoul_admin_dong_area.zip` | 서울시 상권분석서비스 영역-행정동, 행정동 코드 매핑용 |
 | `raw/seoul_living_interest_groups_202512.xlsx` | 서울 시민생활 데이터 행정동단위 10개 관심집단수, 2030 자취/거주성 보정용 |
+| `raw/seoul_admin_dong_boundary.zip` | 선택 파일. 역·정류장 좌표와 행정동 공간 결합용 |
+| `raw/subway_station_coordinates.csv` | 선택 파일. 지하철역 좌표. `station_name`과 위경도 또는 x/y 필요 |
+| `raw/bus_stop_coordinates.csv` | 선택 파일. 버스정류장 좌표. `station_id`, `ars_id`, 또는 `station_name`과 위경도 또는 x/y 필요 |
+| `raw/seoul_commercial_sales_latest.csv` | 선택 파일. 행정동별 추정매출 |
+| `raw/seoul_living_population_latest.csv` | 선택 파일. 행정동별 시간대별 생활인구 |
 
 ## Metadata Files
 

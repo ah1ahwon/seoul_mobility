@@ -650,7 +650,7 @@ output/reports/mixed_commercial_residential_top20.md
 
 `residential_filter == '혼재형 (상권+거주)'` — 거주성 감점 후에도 `adjusted_mobility_score`가 전체 중앙값 이상을 유지한 지역이다. 방문 신호가 충분히 강하지만 거주지 이동이 점수를 일부 끌어올리는 구조가 공존한다.
 
-현재 분석 데이터에서는 거주성 감점(−0.7 × `residential_dominance_score`)이 충분히 커 고거주성 동의 `adjusted_mobility_score`가 전체 중앙값 아래로 내려가므로 혼재형이 0개로 집계된다. 감점 계수를 낮추거나 데이터 구성이 달라지면 이 카테고리에 행정동이 나타날 수 있다. 소비 데이터·점포 밀도·요일별 패턴으로 성격을 추가 분리해야 한다.
+현재 분석 데이터에서는 48개 행정동이 혼재형으로 집계된다. 이 그룹은 방문 신호가 살아 있지만 거주성 효과도 섞여 있으므로 소비 데이터·점포 밀도·요일별 패턴으로 성격을 추가 분리해야 한다.
 
 #### 2030 자취/거주성 분리 대상
 
@@ -672,11 +672,13 @@ output/reports/residential_dominant_2030_top20.md
 
 ```text
 output/processed/monthly_living_migration_2030_summary.csv
+output/processed/monthly_living_migration_all_available_summary.csv
 output/processed/monthly_visitor_candidate_summary.csv
 output/reports/monthly_visitor_candidate_latest_top20.md
 ```
 
 2023년 1월부터 2026년 3월까지 월말 대표일 기준으로 계산한 월별 후보 결과다.
+`monthly_living_migration_all_available_summary.csv`는 `data_archive/raw/`에 보유한 모든 생활이동 ZIP을 월별로 다시 묶는다. 현재 보유 데이터에서는 2026년 3월이 30개 일자 집계이고, 다른 월은 월말 스냅샷 1개 일자 기준이다. `monthly_coverage_type`과 `date_count`로 월별 커버리지를 확인한다.
 
 최신 월인 2026년 3월 월말 스냅샷 기준 상위 예시:
 
@@ -728,6 +730,15 @@ output/reports/bjdong_commercial_candidate_top20.md
 
 `목적 방문형`과 `복합형` 행정동은 `commercial_potential_score`에 보너스 점수(+0.5 / +0.2)가 부여된다.
 
+#### 후보 지역별 자동 설명
+
+```text
+output/processed/candidate_explanations.csv
+output/reports/candidate_explanation_report.md
+```
+
+방문성 후보와 혼재형 후보 중 상위 후보를 대상으로 이동 신호, 시간대·요일 패턴, 거주성 주의점을 짧은 문장으로 자동 생성한다. 이 설명은 최종 결론이 아니라 후보 검토용 요약이다.
+
 ## 4. 최종 해석 기준
 
 현재 분석에서는 다음 순서로 결과를 본다.
@@ -748,11 +759,11 @@ output/reports/bjdong_commercial_candidate_top20.md
 현재 분석은 다음 한계를 가진다.
 
 - 생활이동 데이터는 2026년 3월 30개 일자 샘플이다. 3월 28일 파일은 원천 목록에 없어 제외되었다.
-- 월별 추세 분석은 2023년 1월~2026년 3월 월말 대표일 39개 파일을 사용한다. 전체 일별 월간 합계가 아니므로 특정 월말 이벤트나 요일 효과가 섞일 수 있다.
-- 지하철/버스 데이터는 아직 행정동과 공간 결합하지 않았다.
+- 월별 추세 분석은 2023년 1월~2026년 3월 월말 대표일 39개 파일을 사용한다. 전체 일별 월간 합계가 아니므로 특정 월말 이벤트나 요일 효과가 섞일 수 있다. 보유한 모든 일별 ZIP을 월별로 묶는 확장 산출물도 함께 생성한다.
+- 지하철/버스 행정동 공간 결합은 선택 좌표 파일과 행정동 경계 파일이 있을 때 수행된다. 파일이 없으면 기존 역·정류장 단위 보조지표만 생성한다.
 - `commercial_potential_score`는 선택적 데이터(GIS/매출/생활인구)가 모두 없을 때 이동 지표만으로 계산되므로 용도지역·매출 차이가 반영되지 않는다.
 - 2030 자취/거주성 보정은 완전 제거가 아니라 감점/분리 장치다.
-- `혼재형 (상권+거주)` 카테고리는 현재 데이터에서 0개로 집계된다. 거주성 감점 계수(0.7)가 충분히 커서 고거주성 동의 adjusted_mobility_score가 전체 중앙값 아래로 떨어지기 때문이다.
+- `혼재형 (상권+거주)` 카테고리는 방문 신호와 거주성 신호가 함께 강한 구간이므로, 순수 방문 상권으로 바로 해석하지 않는다.
 - 법정동 매핑 파일이 없을 때 사용하는 패턴 근사치(`잠실6동` → `잠실동`)는 복잡한 이름 규칙을 완전히 처리하지 못한다. 공식 매핑 파일을 준비하면 정확도가 높아진다.
 
 ## 6. 다음 단계
@@ -768,14 +779,18 @@ output/reports/bjdong_commercial_candidate_top20.md
 - [x] 생활인구 유동/상주 비율 구현 (`summarize_population_ratio`)
 - [x] `commercial_potential_score` 복합 점수 생성
 - [x] 법정동 단위 집계 (`aggregate_to_bjdong`)
+- [x] 선택적 데이터 로더와 파이프라인 검증
+  - 매출: `bash data_archive/scripts/download_commercial_sales.sh`
+  - 생활인구: `bash data_archive/scripts/download_living_population.sh`
+  - 법정동 매핑: `bash data_archive/scripts/download_bjdong_mapping.sh`
+  - GIS: `bash data_archive/scripts/download_gis_data.sh` + `pip install geopandas shapely`
+  - 파일이 없거나 패키지가 없으면 해당 레이어를 건너뛰고 이동 데이터 기준으로 계속 실행
+- [x] 보유한 모든 생활이동 일별 ZIP을 월별로 묶는 확장 산출물 생성 (`monthly_living_migration_all_available_summary.csv`)
+- [x] 역·정류장 좌표와 행정동 경계의 선택적 공간 결합 구조 구현 (`transport_access_by_dong.csv`)
+- [x] 후보 지역별 자동 설명 리포트 생성 (`candidate_explanation_report.md`)
 
-### 남은 항목
+### 운영상 확인 항목
 
-1. 선택적 데이터 실제 수집 및 파이프라인 검증
-   - `bash data_archive/scripts/download_commercial_sales.sh` (seq 확인 필요)
-   - `bash data_archive/scripts/download_living_population.sh` (seq 확인 필요)
-   - `bash data_archive/scripts/download_bjdong_mapping.sh` (수동 준비 안내)
-   - `bash data_archive/scripts/download_gis_data.sh` (수동 준비 안내) + `pip install geopandas shapely`
-2. 월말 스냅샷이 아닌 월 전체 일별 집계로 확장
-3. 역·정류장 좌표를 행정동 경계와 공간 결합 → 행정동별 교통 접근성 지표 생성
-4. 후보 지역별 자동 설명 리포트 생성
+- 매출·생활인구 다운로드 스크립트의 `seq`는 서울 열린데이터광장 원천 페이지에서 최신 파일 기준으로 바뀔 수 있다.
+- `seoul_admin_dong_boundary.zip`, `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`가 없으면 교통 접근성 공간 결합은 건너뛴다.
+- 월별 전체 일별 집계를 완전히 만들려면 각 월의 모든 일별 생활이동 ZIP을 추가로 확보해야 한다.
