@@ -82,6 +82,10 @@ COMMERCIAL_SALES_CSV = RAW_DIR / "seoul_commercial_sales_latest.csv"
 # 서울 생활인구 — 행정동별 시간대별 추정 유동인구 (download_living_population.sh)
 LIVING_POPULATION_CSV = RAW_DIR / "seoul_living_population_latest.csv"
 
+# 선택 좌표 파일: 있으면 행정동 경계와 공간 결합해 교통 접근성 지표 생성
+SUBWAY_STATION_COORD_CSV = RAW_DIR / "subway_station_coordinates.csv"
+BUS_STOP_COORD_CSV = RAW_DIR / "bus_stop_coordinates.csv"
+
 SEOUL_GU_CODE_TO_NAME = {
     "11110": "종로구",
     "11140": "중구",
@@ -413,6 +417,14 @@ def get_month_end_living_migration_paths(
     return existing
 
 
+def get_all_living_migration_paths() -> list[Path]:
+    """Return all archived living-migration ZIP files available under RAW_DIR."""
+    paths = sorted(RAW_DIR.glob("seoul_purpose_admdong4_in_*.zip"))
+    if not paths:
+        raise FileNotFoundError(f"No living-migration ZIP files found: {RAW_DIR}")
+    return paths
+
+
 def summarize_living_migration(
     input_paths: list[Path] | None = None,
     chunksize: int = 500_000,
@@ -726,6 +738,33 @@ def summarize_living_migration_monthly(
         + zscore_by_group(dest, "yyyymm", dest["evening_2030_ratio"])
     )
     return dest.sort_values(["yyyymm", "mobility_score", "cnt_2030"], ascending=[True, False, False])
+
+
+def summarize_living_migration_monthly_all_available(
+    chunksize: int = 500_000,
+) -> pd.DataFrame:
+    """
+    Summarize monthly demand with every daily ZIP currently present in RAW_DIR.
+
+    Months with only one archived file remain partial-month snapshots. Months
+    with many daily files, such as the March 2026 archive, become closer to a
+    month-level daily aggregate. The coverage columns make that distinction
+    explicit in downstream reports.
+    """
+    paths = get_all_living_migration_paths()
+    summary = summarize_living_migration_monthly(input_paths=paths, chunksize=chunksize)
+    coverage = (
+        summary[["yyyymm", "date_count"]]
+        .drop_duplicates()
+        .assign(
+            monthly_coverage_type=lambda df: np.where(
+                df["date_count"] >= 20,
+                "월 전체/대부분 일별 집계",
+                "부분 일자/월말 스냅샷",
+            )
+        )
+    )
+    return summary.merge(coverage, on=["yyyymm", "date_count"], how="left")
 
 
 def classify_candidate(row: pd.Series, quantiles: dict[str, float]) -> str:
@@ -1484,6 +1523,124 @@ def summarize_transport_patterns(
     return subway_station, bus_stop, bus_hour
 
 
+def _read_coordinate_csv(input_path: Path) -> pd.DataFrame:
+    """Read a point CSV and normalize common coordinate/name/id columns."""
+    df = pd.read_csv(input_path, encoding="utf-8-sig", low_memory=False)
+    rename_map = {}
+    for col in df.columns:
+        lower = str(col).lower()
+        if col in ["역명", "역사명", "정류장명", "station_nm", "station_name"]:
+            rename_map[col] = "station_name"
+        elif col in ["표준버스정류장ID", "station_id", "NODE_ID", "node_id"]:
+            rename_map[col] = "station_id"
+        elif col in ["버스정류장ARS번호", "ars_id", "ARS_ID", "ars_no"]:
+            rename_map[col] = "ars_id"
+        elif col in ["경도", "lon", "lng", "longitude", "x좌표", "x_coord"] or lower in ["x", "lon", "lng"]:
+            rename_map[col] = "x"
+        elif col in ["위도", "lat", "latitude", "y좌표", "y_coord"] or lower in ["y", "lat"]:
+            rename_map[col] = "y"
+    df = df.rename(columns=rename_map)
+    if "x" not in df.columns or "y" not in df.columns:
+        raise ValueError(f"Coordinate columns not found in {input_path.name}")
+    df["x"] = pd.to_numeric(df["x"], errors="coerce")
+    df["y"] = pd.to_numeric(df["y"], errors="coerce")
+    return df.dropna(subset=["x", "y"]).copy()
+
+
+def _points_from_coordinate_df(df: pd.DataFrame):
+    """Build a GeoDataFrame from normalized x/y columns."""
+    import geopandas as gpd
+
+    crs = "EPSG:4326" if df["x"].abs().max() <= 180 and df["y"].abs().max() <= 90 else "EPSG:5186"
+    return gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df["x"], df["y"]), crs=crs)
+
+
+def summarize_transport_access_by_dong(
+    subway_station: pd.DataFrame,
+    bus_stop: pd.DataFrame,
+    admin_dong_path: Path = ADMIN_DONG_BOUNDARY_ZIP,
+    subway_coord_path: Path = SUBWAY_STATION_COORD_CSV,
+    bus_coord_path: Path = BUS_STOP_COORD_CSV,
+) -> pd.DataFrame:
+    """
+    Spatially join optional station/stop coordinate files to admin-dong boundaries.
+
+    Expected optional files:
+      - subway_station_coordinates.csv: station_name, longitude/latitude or x/y
+      - bus_stop_coordinates.csv: station_id or ars_id or station_name, longitude/latitude or x/y
+    """
+    if not admin_dong_path.exists():
+        print(f"   행정동 경계 파일 없음 ({admin_dong_path.name}) — 교통 접근성 공간 결합 건너뜀")
+        return pd.DataFrame()
+    if not subway_coord_path.exists() and not bus_coord_path.exists():
+        print("   역/정류장 좌표 파일 없음 — 교통 접근성 공간 결합 건너뜀")
+        return pd.DataFrame()
+    try:
+        import geopandas as gpd
+    except ImportError:
+        print("   geopandas 미설치 — 교통 접근성 공간 결합 건너뜀 (pip install geopandas)")
+        return pd.DataFrame()
+
+    dongs = gpd.read_file(f"zip://{admin_dong_path}")
+    cd_col = next(
+        (c for c in dongs.columns if any(k in c.lower() for k in ["adm", "emd", "dong_cd", "hjdong"])),
+        None,
+    )
+    if cd_col is None:
+        print("   행정동 코드 컬럼 탐지 실패 — 교통 접근성 공간 결합 건너뜀")
+        return pd.DataFrame()
+    dongs = dongs[[cd_col, "geometry"]].rename(columns={cd_col: "d_admdong_cd"})
+
+    parts = []
+    if subway_coord_path.exists():
+        coords = _read_coordinate_csv(subway_coord_path)
+        if "station_name" in coords.columns:
+            pts = _points_from_coordinate_df(coords).to_crs(dongs.crs)
+            joined = gpd.sjoin(pts, dongs, how="inner", predicate="within")
+            subway_joined = joined.merge(subway_station, on="station_name", how="left")
+            subway_summary = subway_joined.groupby("d_admdong_cd", as_index=False).agg(
+                subway_station_count=("station_name", "nunique"),
+                subway_total_count=("subway_total_count", "sum"),
+            )
+            parts.append(subway_summary)
+
+    if bus_coord_path.exists():
+        coords = _read_coordinate_csv(bus_coord_path)
+        pts = _points_from_coordinate_df(coords).to_crs(dongs.crs)
+        joined = gpd.sjoin(pts, dongs, how="inner", predicate="within")
+        merge_key = next((c for c in ["station_id", "ars_id", "station_name"] if c in joined.columns and c in bus_stop.columns), None)
+        if merge_key is not None:
+            bus_joined = joined.merge(bus_stop, on=merge_key, how="left")
+        else:
+            bus_joined = joined.copy()
+            bus_joined["bus_total_count"] = 0.0
+            bus_joined["route_count"] = 0.0
+        bus_summary = bus_joined.groupby("d_admdong_cd", as_index=False).agg(
+            bus_stop_count=("geometry", "size"),
+            bus_total_count=("bus_total_count", "sum"),
+            bus_route_count=("route_count", "sum"),
+        )
+        parts.append(bus_summary)
+
+    if not parts:
+        return pd.DataFrame()
+    result = parts[0]
+    for part in parts[1:]:
+        result = result.merge(part, on="d_admdong_cd", how="outer")
+    for col in ["subway_station_count", "subway_total_count", "bus_stop_count", "bus_total_count", "bus_route_count"]:
+        if col not in result.columns:
+            result[col] = 0.0
+        result[col] = pd.to_numeric(result[col], errors="coerce").fillna(0.0)
+    result["transport_access_score"] = (
+        zscore(np.log1p(result["subway_total_count"]))
+        + zscore(np.log1p(result["bus_total_count"]))
+        + zscore(np.log1p(result["subway_station_count"] + result["bus_stop_count"]))
+    )
+    result["d_admdong_cd"] = result["d_admdong_cd"].astype(str)
+    print(f"   교통 접근성 공간 결합 완료: {len(result)}개 행정동")
+    return result
+
+
 def dataframe_to_markdown(df: pd.DataFrame) -> str:
     """Make a Markdown table without requiring the optional tabulate package."""
     out = df.copy()
@@ -1498,6 +1655,71 @@ def dataframe_to_markdown(df: pd.DataFrame) -> str:
     for row in out.itertuples(index=False, name=None):
         lines.append("| " + " | ".join(str(value) for value in row) + " |")
     return "\n".join(lines)
+
+
+def build_candidate_explanations(dest: pd.DataFrame, top_n: int = 30) -> pd.DataFrame:
+    """Create short rule-based explanations for top candidate administrative dongs."""
+    source = dest[
+        dest["residential_filter"].isin(["방문성 검토", "혼재형 (상권+거주)"])
+    ].sort_values(["commercial_potential_score", "adjusted_mobility_score"], ascending=False)
+    rows = []
+    for _, row in source.head(top_n).iterrows():
+        name = f"{row['d_gu_name']} {row['d_admdong_name']}"
+        signals = []
+        cautions = []
+
+        if row.get("origin_diversity", 0) >= dest["origin_diversity"].quantile(0.75):
+            signals.append("출발지 다양성이 높아 광역 유입 신호가 강함")
+        if row.get("evening_2030_ratio", 0) >= dest["evening_2030_ratio"].quantile(0.75):
+            signals.append("저녁 시간대 2030 도착 비중이 높음")
+        if row.get("weekend_2030_ratio", 0) >= dest["weekend_2030_ratio"].quantile(0.60):
+            signals.append("주말 방문 비중이 상대적으로 높음")
+        if row.get("share_2030", 0) >= dest["share_2030"].quantile(0.75):
+            signals.append("전체 이동 중 2030 비중이 높음")
+        if row.get("residential_filter") == "혼재형 (상권+거주)":
+            cautions.append("거주성 신호도 함께 강해 소비·점포 데이터로 추가 확인 필요")
+        if row.get("young_single_ratio", 0) >= dest["young_single_ratio"].quantile(0.75):
+            cautions.append("2030 1인가구 비율이 높아 자취/생활권 효과가 섞일 수 있음")
+        if not signals:
+            signals.append("보정 이동 점수 기준 상위권이나 세부 패턴은 추가 확인 필요")
+        if not cautions:
+            cautions.append("현재 이동 데이터 기준의 1차 후보이며 매출·용도지역 결합 시 재평가 필요")
+        signal_text = " ".join(f"{signal}." for signal in signals)
+        caution_text = " ".join(f"{caution}." for caution in cautions)
+
+        rows.append(
+            {
+                "rank": len(rows) + 1,
+                "d_gu_name": row["d_gu_name"],
+                "d_admdong_name": row["d_admdong_name"],
+                "residential_filter": row["residential_filter"],
+                "candidate_type": row["candidate_type"],
+                "visit_pattern_type": row.get("visit_pattern_type", "불명확"),
+                "commercial_potential_score": row.get("commercial_potential_score", row["adjusted_mobility_score"]),
+                "adjusted_mobility_score": row["adjusted_mobility_score"],
+                "summary": f"{name}은 {row['candidate_type']} 후보입니다. {signal_text}",
+                "caution": caution_text,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def write_candidate_explanation_report(explanations: pd.DataFrame) -> None:
+    """Write an automatic narrative report for candidate dongs."""
+    if explanations.empty:
+        return
+    sections = ["# 후보 지역별 자동 설명 리포트\n"]
+    for _, row in explanations.iterrows():
+        sections.append(
+            "\n"
+            f"## {int(row['rank'])}. {row['d_gu_name']} {row['d_admdong_name']}\n\n"
+            f"- 분류: {row['residential_filter']} / {row['candidate_type']} / {row['visit_pattern_type']}\n"
+            f"- 점수: commercial_potential_score {row['commercial_potential_score']:.3f}, "
+            f"adjusted_mobility_score {row['adjusted_mobility_score']:.3f}\n"
+            f"- 해석: {row['summary']}\n"
+            f"- 주의: {row['caution']}\n"
+        )
+    (REPORTS_DIR / "candidate_explanation_report.md").write_text("\n".join(sections), encoding="utf-8")
 
 
 def write_top20_report(dest: pd.DataFrame) -> None:
@@ -1709,12 +1931,11 @@ def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame
         "화요일이면 과소 추정될 수 있습니다. "
         "`snapshot_weekday`, `is_weekend_snapshot` 컬럼이 이를 표시하므로 "
         "월간 비교 시 참고하세요. 전체 일별 월간 합계가 아니라는 점도 유의해야 합니다.\n\n"
-        "**2. 지하철/버스 — 행정동 공간 결합 미완성**\n\n"
-        "현재 지하철·버스 데이터에는 역명·정류장명만 있고 좌표가 없습니다. "
-        "행정동 경계(`admin_dong_mapping`)에는 중심 좌표가 있으나 "
-        "역명-행정동 텍스트 매핑은 오류율이 높아 사용하지 않았습니다. "
-        "다음 단계: 서울 열린데이터광장의 지하철역 좌표 또는 버스정류장 좌표 파일을 추가하면 "
-        "행정동 경계와 공간 조인이 가능해 행정동별 교통 접근성 지표를 만들 수 있습니다.\n\n"
+        "**2. 지하철/버스 — 행정동 공간 결합**\n\n"
+        "기본 지하철·버스 데이터에는 역명·정류장명만 있고 좌표가 없습니다. "
+        "`seoul_admin_dong_boundary.zip`과 선택 좌표 파일(`subway_station_coordinates.csv`, "
+        "`bus_stop_coordinates.csv`)이 있으면 공간 조인으로 `transport_access_by_dong.csv`를 생성합니다. "
+        "좌표 파일이 없으면 기존처럼 역·정류장 단위 보조지표만 사용합니다.\n\n"
         "**3. 소비/점포 데이터 미결합**\n\n"
         "현재 분석은 이동량 신호만 사용합니다. "
         "실제 상권성 확인을 위해서는 카드 매출 집계, 업종별 점포 수 등의 결합이 필요합니다. "
@@ -1826,6 +2047,11 @@ def run_all() -> None:
         ["residential_dominance_score", "mobility_score"], ascending=False
     ).to_csv(residential_dominant_path, index=False, encoding="utf-8-sig")
 
+    explanations = build_candidate_explanations(dest)
+    explanations_path = PROCESSED_DIR / "candidate_explanations.csv"
+    explanations.to_csv(explanations_path, index=False, encoding="utf-8-sig")
+    write_candidate_explanation_report(explanations)
+
     # 법정동 Top 20 보고서
     bjdong_report_cols = [
         c for c in [
@@ -1874,6 +2100,13 @@ def run_all() -> None:
     monthly_trend.to_csv(monthly_trend_path, index=False, encoding="utf-8-sig")
     write_monthly_reports(monthly, monthly_trend)
 
+    print("3-1b. Analyzing all available daily files by month...")
+    monthly_all = summarize_living_migration_monthly_all_available()
+    monthly_all = enrich_monthly_destination_summary(monthly_all, admin_mapping)
+    monthly_all = add_residential_adjustment(monthly_all, residential)
+    monthly_all_path = PROCESSED_DIR / "monthly_living_migration_all_available_summary.csv"
+    monthly_all.to_csv(monthly_all_path, index=False, encoding="utf-8-sig")
+
     print("4. Creating transport support summaries and interpretation report...")
     subway_station, bus_stop, bus_hour = summarize_transport_patterns(subway, bus_summary, bus_hourly)
     subway_station_path = PROCESSED_DIR / "subway_station_summary.csv"
@@ -1882,6 +2115,11 @@ def run_all() -> None:
     subway_station.to_csv(subway_station_path, index=False, encoding="utf-8-sig")
     bus_stop.to_csv(bus_stop_path, index=False, encoding="utf-8-sig")
     bus_hour.to_csv(bus_hour_path, index=False, encoding="utf-8-sig")
+    transport_access = summarize_transport_access_by_dong(subway_station, bus_stop)
+    if not transport_access.empty:
+        transport_access_path = PROCESSED_DIR / "transport_access_by_dong.csv"
+        transport_access.to_csv(transport_access_path, index=False, encoding="utf-8-sig")
+        print(f"   saved: {transport_access_path} ({len(transport_access):,} rows)")
     write_interpretation_report(dest, subway_station, bus_stop)
     print(f"   saved: {subway_station_path} ({len(subway_station):,} rows)")
     print(f"   saved: {bus_stop_path} ({len(bus_stop):,} rows)")
@@ -1891,14 +2129,17 @@ def run_all() -> None:
     print(f"   saved: {visitor_path} ({(dest['residential_filter'] == '방문성 검토').sum():,} rows)")
     print(f"   saved: {mixed_path} ({(dest['residential_filter'] == '혼재형 (상권+거주)').sum():,} rows)")
     print(f"   saved: {residential_dominant_path} ({(dest['residential_filter'] == '2030 자취/거주성 높음').sum():,} rows)")
+    print(f"   saved: {explanations_path} ({len(explanations):,} rows)")
     print(f"   saved: {hourly_path} ({len(hourly):,} rows)")
     print(f"   saved: {monthly_path} ({len(monthly):,} rows)")
+    print(f"   saved: {monthly_all_path} ({len(monthly_all):,} rows)")
     print(f"   saved: {monthly_visitor_path} ({(monthly['residential_filter'] == '방문성 검토').sum():,} rows)")
     print(f"   saved: {monthly_trend_path} ({len(monthly_trend):,} rows)")
     print(f"   saved: {REPORTS_DIR / 'living_migration_2030_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'visitor_candidate_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'mixed_commercial_residential_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'residential_dominant_2030_top20.md'}")
+    print(f"   saved: {REPORTS_DIR / 'candidate_explanation_report.md'}")
     print(f"   saved: {REPORTS_DIR / 'monthly_visitor_candidate_latest_top20.md'}")
     print(f"   saved: {REPORTS_DIR / 'monthly_candidate_trend_top20.md'}")
 
