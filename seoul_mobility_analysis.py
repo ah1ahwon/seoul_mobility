@@ -838,11 +838,11 @@ def classify_visit_pattern(dest: pd.DataFrame) -> pd.Series:
     return pd.Series(
         np.select(
             [
+                is_weekend_heavy & is_weekday_heavy,    # 양쪽 모두 강함
                 is_weekend_heavy & is_evening_heavy,   # 주말·저녁/심야 집중
                 is_weekday_heavy & ~is_weekend_heavy,   # 평일 중심, 주말 약함
-                is_weekend_heavy & is_weekday_heavy,    # 양쪽 모두 강함
             ],
-            ["목적 방문형", "생활 밀착형", "복합형"],
+            ["복합형", "목적 방문형", "생활 밀착형"],
             default="불명확",
         ),
         index=dest.index,
@@ -912,16 +912,17 @@ def aggregate_to_bjdong(
 
     sum_cols = [c for c in df.columns if c.endswith("_cnt") or c == "total_cnt"]
     score_cols = [c for c in df.columns if c.endswith("_score") or c.endswith("_ratio")]
+    group_cols = ["bjdong_cd"] if bjdong_map is not None else ["d_gu_name", "bjdong_nm"]
     key_cols = ["d_gu_name", "bjdong_cd", "bjdong_nm"]
 
     agg_dict: dict = {c: "sum" for c in sum_cols if c in df.columns}
     agg_dict.update({c: "mean" for c in score_cols if c in df.columns})
-    agg_dict.update({c: "first" for c in key_cols if c in df.columns})
+    agg_dict.update({c: "first" for c in key_cols if c in df.columns and c not in group_cols})
     for cat_col in ["candidate_type", "visit_pattern_type", "residential_filter"]:
         if cat_col in df.columns:
             agg_dict[cat_col] = lambda s: s.value_counts().index[0] if len(s) > 0 else "불명확"
 
-    result = df.groupby("bjdong_nm", as_index=False).agg(agg_dict)
+    result = df.groupby(group_cols, as_index=False, dropna=False).agg(agg_dict)
     sort_col = "commercial_potential_score" if "commercial_potential_score" in result.columns else "adjusted_mobility_score"
     if sort_col in result.columns:
         result = result.sort_values(sort_col, ascending=False)
@@ -1921,7 +1922,10 @@ def run_all() -> None:
     )
 
     print("\n5. Committing output files to git...")
-    commit_outputs()
+    if os.environ.get("SEOUL_SKIP_GIT") == "1":
+        print("   SEOUL_SKIP_GIT=1 — skipping commit/push")
+    else:
+        commit_outputs()
 
 
 def commit_outputs(
