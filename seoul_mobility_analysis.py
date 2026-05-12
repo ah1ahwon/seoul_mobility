@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import calendar
 from datetime import datetime
 from pathlib import Path
 
@@ -757,13 +758,18 @@ def summarize_living_migration_monthly_all_available(
         summary[["yyyymm", "date_count"]]
         .drop_duplicates()
         .assign(
+            expected_days=lambda df: df["yyyymm"].map(
+                lambda ym: calendar.monthrange(int(str(ym)[:4]), int(str(ym)[4:6]))[1]
+            ),
             monthly_coverage_type=lambda df: np.where(
                 df["date_count"] >= 20,
                 "월 전체/대부분 일별 집계",
                 "부분 일자/월말 스냅샷",
-            )
+            ),
         )
     )
+    coverage["coverage_ratio"] = coverage["date_count"] / coverage["expected_days"]
+    coverage["missing_days_count"] = (coverage["expected_days"] - coverage["date_count"]).clip(lower=0)
     return summary.merge(coverage, on=["yyyymm", "date_count"], how="left")
 
 

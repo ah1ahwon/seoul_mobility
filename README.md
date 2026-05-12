@@ -139,7 +139,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `mixed_commercial_residential_summary.csv` | 혼재형 후보 (상권+거주 동시 강함) |
 | `residential_dominant_2030_summary.csv` | 2030 자취/거주성 분리 대상 |
 | `monthly_living_migration_2030_summary.csv` | 월별 2030 생활이동 전체 요약 |
-| `monthly_living_migration_all_available_summary.csv` | 보유한 모든 일별 ZIP을 월별로 집계한 확장 요약 |
+| `monthly_living_migration_all_available_summary.csv` | 보유한 모든 일별 ZIP을 월별로 집계한 확장 요약 (`coverage_ratio`, `missing_days_count` 포함) |
 | `monthly_visitor_candidate_summary.csv` | 월별 방문 상권 후보 |
 | `monthly_candidate_trend_summary.csv` | 장기 월별 강세 후보 트렌드 |
 | `candidate_explanations.csv` | 후보 지역별 상위/하위 자동 설명 요약 |
@@ -216,3 +216,17 @@ bash data_archive/scripts/download_latest_examples.sh
 ```bash
 bash data_archive/scripts/download_living_migration_month_end.sh
 ```
+
+3월 한 달 중심 분석의 한계를 줄이려면 여러 월의 일별 생활이동 ZIP을 추가로 내려받아야 합니다. 아래 스크립트는 날짜 범위의 일별 파일을 받아 `monthly_living_migration_all_available_summary.csv`에서 월별 전체/부분 커버리지를 비교할 수 있게 합니다.
+
+```bash
+bash data_archive/scripts/download_living_migration_daily_range.sh
+```
+
+특정 기간만 받을 수도 있습니다.
+
+```bash
+START_DATE=2025-01-01 END_DATE=2025-12-31 bash data_archive/scripts/download_living_migration_daily_range.sh
+```
+
+다운로드 전 대상 파일명만 확인하려면 `DRY_RUN=1`을 사용합니다.

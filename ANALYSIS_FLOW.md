@@ -678,7 +678,15 @@ output/reports/monthly_visitor_candidate_latest_top20.md
 ```
 
 2023년 1월부터 2026년 3월까지 월말 대표일 기준으로 계산한 월별 후보 결과다.
-`monthly_living_migration_all_available_summary.csv`는 `data_archive/raw/`에 보유한 모든 생활이동 ZIP을 월별로 다시 묶는다. 현재 보유 데이터에서는 2026년 3월이 30개 일자 집계이고, 다른 월은 월말 스냅샷 1개 일자 기준이다. `monthly_coverage_type`과 `date_count`로 월별 커버리지를 확인한다.
+`monthly_living_migration_all_available_summary.csv`는 `data_archive/raw/`에 보유한 모든 생활이동 ZIP을 월별로 다시 묶는다. 현재 보유 데이터에서는 2026년 3월이 30개 일자 집계이고, 다른 월은 월말 스냅샷 1개 일자 기준이다. `monthly_coverage_type`, `date_count`, `expected_days`, `coverage_ratio`, `missing_days_count`로 월별 커버리지를 확인한다.
+
+3월 중심 상세 분석의 한계를 줄이려면 여러 월의 일별 ZIP을 추가 확보해야 한다. 날짜 범위 다운로드는 다음 스크립트로 수행한다.
+
+```bash
+bash data_archive/scripts/download_living_migration_daily_range.sh
+START_DATE=2025-01-01 END_DATE=2025-12-31 bash data_archive/scripts/download_living_migration_daily_range.sh
+DRY_RUN=1 START_DATE=2025-01-01 END_DATE=2025-01-03 bash data_archive/scripts/download_living_migration_daily_range.sh
+```
 
 `monthly_visitor_candidate_latest_top20.md`에는 최신 월 기준 방문성 후보 상위 20개와, 같은 후보군 안에서 보정 점수가 낮은 하위 5개 비교군이 함께 들어간다. 하위 5개는 적극 후보가 아니라 우선순위 조정과 제외 판단에 참고한다.
 
@@ -761,7 +769,7 @@ output/reports/candidate_explanation_report.md
 현재 분석은 다음 한계를 가진다.
 
 - 생활이동 데이터는 2026년 3월 30개 일자 샘플이다. 3월 28일 파일은 원천 목록에 없어 제외되었다.
-- 월별 추세 분석은 2023년 1월~2026년 3월 월말 대표일 39개 파일을 사용한다. 전체 일별 월간 합계가 아니므로 특정 월말 이벤트나 요일 효과가 섞일 수 있다. 보유한 모든 일별 ZIP을 월별로 묶는 확장 산출물도 함께 생성한다.
+- 월별 추세 분석은 2023년 1월~2026년 3월 월말 대표일 39개 파일을 사용한다. 전체 일별 월간 합계가 아니므로 특정 월말 이벤트나 요일 효과가 섞일 수 있다. 보유한 모든 일별 ZIP을 월별로 묶는 확장 산출물도 함께 생성하며, 날짜 범위 다운로드 스크립트로 각 월의 커버리지를 높일 수 있다.
 - 지하철/버스 행정동 공간 결합은 선택 좌표 파일과 행정동 경계 파일이 있을 때 수행된다. 파일이 없으면 기존 역·정류장 단위 보조지표만 생성한다.
 - `commercial_potential_score`는 선택적 데이터(GIS/매출/생활인구)가 모두 없을 때 이동 지표만으로 계산되므로 용도지역·매출 차이가 반영되지 않는다.
 - 2030 자취/거주성 보정은 완전 제거가 아니라 감점/분리 장치다.
@@ -788,6 +796,7 @@ output/reports/candidate_explanation_report.md
   - GIS: `bash data_archive/scripts/download_gis_data.sh` + `pip install geopandas shapely`
   - 파일이 없거나 패키지가 없으면 해당 레이어를 건너뛰고 이동 데이터 기준으로 계속 실행
 - [x] 보유한 모든 생활이동 일별 ZIP을 월별로 묶는 확장 산출물 생성 (`monthly_living_migration_all_available_summary.csv`)
+- [x] 날짜 범위별 생활이동 일별 ZIP 다운로드 스크립트 추가 (`download_living_migration_daily_range.sh`)
 - [x] 역·정류장 좌표와 행정동 경계의 선택적 공간 결합 구조 구현 (`transport_access_by_dong.csv`)
 - [x] 후보 지역별 자동 설명 리포트 생성 (`candidate_explanation_report.md`)
 
@@ -795,4 +804,4 @@ output/reports/candidate_explanation_report.md
 
 - 매출·생활인구 다운로드 스크립트의 `seq`는 서울 열린데이터광장 원천 페이지에서 최신 파일 기준으로 바뀔 수 있다.
 - `seoul_admin_dong_boundary.zip`, `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`가 없으면 교통 접근성 공간 결합은 건너뛴다.
-- 월별 전체 일별 집계를 완전히 만들려면 각 월의 모든 일별 생활이동 ZIP을 추가로 확보해야 한다.
+- 월별 전체 일별 집계를 완전히 만들려면 `download_living_migration_daily_range.sh`로 각 월의 모든 일별 생활이동 ZIP을 추가 확보하고, `coverage_ratio`가 1에 가까운지 확인해야 한다.
