@@ -680,6 +680,8 @@ output/reports/monthly_visitor_candidate_latest_top20.md
 2023년 1월부터 2026년 3월까지 월말 대표일 기준으로 계산한 월별 후보 결과다.
 `monthly_living_migration_all_available_summary.csv`는 `data_archive/raw/`에 보유한 모든 생활이동 ZIP을 월별로 다시 묶는다. 현재 보유 데이터에서는 2026년 3월이 30개 일자 집계이고, 다른 월은 월말 스냅샷 1개 일자 기준이다. `monthly_coverage_type`과 `date_count`로 월별 커버리지를 확인한다.
 
+`monthly_visitor_candidate_latest_top20.md`에는 최신 월 기준 방문성 후보 상위 20개와, 같은 후보군 안에서 보정 점수가 낮은 하위 5개 비교군이 함께 들어간다. 하위 5개는 적극 후보가 아니라 우선순위 조정과 제외 판단에 참고한다.
+
 최신 월인 2026년 3월 월말 스냅샷 기준 상위 예시:
 
 ```text
