@@ -806,8 +806,9 @@ def enrich_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) 
         "d_center_x",
         "d_center_y",
     ]
-    other_cols = [col for col in enriched.columns if col not in display_cols]
-    return enriched[display_cols + other_cols]
+    actual_display_cols = [col for col in display_cols if col in enriched.columns]
+    other_cols = [col for col in enriched.columns if col not in actual_display_cols]
+    return enriched[actual_display_cols + other_cols]
 
 
 def classify_visit_pattern(dest: pd.DataFrame) -> pd.Series:
