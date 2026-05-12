@@ -84,6 +84,8 @@ python3 -m pip install -r requirements.txt
 python3 seoul_mobility_analysis.py
 ```
 
+분석 시작 직후 필수 입력 파일 preflight를 수행합니다. 매출, 생활인구, GIS, 법정동 매핑, 역·정류장 좌표가 없으면 대용량 생활이동 파일을 읽기 전에 중단하고 누락 목록을 출력합니다.
+
 환경변수로 경로를 오버라이드할 수 있습니다.
 
 | 환경변수 | 기본값 | 설명 |
