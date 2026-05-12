@@ -139,6 +139,48 @@ def require_input(path: Path, label: str, hint: str = "") -> bool:
     raise FileNotFoundError(message)
 
 
+def validate_required_inputs() -> None:
+    """Fail fast before expensive processing if required final-analysis inputs are missing."""
+    required_files = [
+        (ADMIN_DONG_AREA_ZIP, "행정동 코드/명칭 매핑", "bash data_archive/scripts/download_latest_examples.sh"),
+        (LIVING_INTEREST_XLSX, "서울 시민생활 1인가구", "bash data_archive/scripts/download_latest_examples.sh"),
+        (SUBWAY_CSV, "지하철 승하차", "bash data_archive/scripts/download_latest_examples.sh"),
+        (BUS_CSV, "버스 승하차", "bash data_archive/scripts/download_latest_examples.sh"),
+        (COMMERCIAL_SALES_CSV, "매출 데이터", "bash data_archive/scripts/download_commercial_sales.sh"),
+        (LIVING_POPULATION_CSV, "생활인구 데이터", "bash data_archive/scripts/download_living_population.sh"),
+        (LAND_USE_ZIP, "용도지역", "bash data_archive/scripts/download_gis_data.sh"),
+        (ADMIN_DONG_BOUNDARY_ZIP, "행정동 경계", "bash data_archive/scripts/download_gis_data.sh"),
+        (SUBWAY_STATION_COORD_CSV, "지하철역 좌표", "raw/subway_station_coordinates.csv 준비"),
+        (BUS_STOP_COORD_CSV, "버스정류장 좌표", "raw/bus_stop_coordinates.csv 준비"),
+        (BJDONG_MAPPING_CSV, "행정동-법정동 매핑", "bash data_archive/scripts/download_bjdong_mapping.sh"),
+    ]
+    missing_messages = []
+    for path, label, hint in required_files:
+        if not path.exists():
+            missing_messages.append(f"- {label}: {path}\n  준비 방법: {hint}")
+
+    living_paths = sorted(RAW_DIR.glob(LIVING_MIGRATION_PATTERN))
+    if not living_paths:
+        missing_messages.append(
+            f"- 2026년 3월 생활이동 일별 ZIP: {RAW_DIR / LIVING_MIGRATION_PATTERN}\n"
+            "  준비 방법: bash data_archive/scripts/download_living_migration_202603.sh"
+        )
+
+    if missing_messages and allow_partial_run():
+        print("0. Required input preflight...")
+        print("   SEOUL_ALLOW_PARTIAL=1 — missing inputs will be skipped where supported:")
+        print("\n".join(missing_messages))
+        return
+    if missing_messages:
+        raise FileNotFoundError(
+            "필수 입력 파일이 부족해 분석을 시작하지 않습니다.\n"
+            + "\n".join(missing_messages)
+            + "\n\n개발용 부분 실행이 필요할 때만 SEOUL_ALLOW_PARTIAL=1을 설정하세요."
+        )
+
+    print("0. Required input preflight passed.")
+
+
 # ---------------------------------------------------------------------------
 # Subway preprocessing
 # ---------------------------------------------------------------------------
@@ -2026,6 +2068,7 @@ def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame
 
 def run_all() -> None:
     ensure_output_dirs()
+    validate_required_inputs()
 
     print("0. Reading administrative-dong mapping...")
     admin_mapping = read_admin_dong_mapping()
