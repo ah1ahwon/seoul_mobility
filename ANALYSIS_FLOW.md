@@ -209,11 +209,7 @@ https://data.seoul.go.kr/dataList/OA-12914/S/1/datasetView.do
 - 현재 지하철 데이터는 행정동과 공간 결합하지 않았다.
 - 따라서 후보 행정동을 설명하는 보조 맥락으로만 사용한다.
 
-### 2.5 서울시 버스노선별 정류장별 시간대별 승하차 인원 (교통 보조지표)
-
-> 아래 섹션(2.5)은 기존 교통 보조지표이며, 2.6~2.9는 새로 추가된 선택적 레이어다.
-
-### 2.6 서울시 상권분석서비스 행정동별 추정매출 (선택)
+### 2.5 서울시 상권분석서비스 행정동별 추정매출 (선택)
 
 파일:
 
@@ -245,7 +241,7 @@ https://data.seoul.go.kr/dataList/OA-15568/S/1/datasetView.do
 - 파일이 없으면 해당 요소를 건너뛰고 나머지 점수만으로 계산한다.
 - 다운로드: `bash data_archive/scripts/download_commercial_sales.sh`
 
-### 2.7 서울 생활인구 (내국인) 행정동별 시간대별 (선택)
+### 2.6 서울 생활인구 (내국인) 행정동별 시간대별 (선택)
 
 파일:
 
@@ -268,10 +264,10 @@ https://data.seoul.go.kr/dataList/OA-14939/S/1/datasetView.do
 비고:
 
 - 월 1~2 GB 규모의 대용량 파일이다.
-- 파일이 없으면 해당 요소를 0으로 대체한다.
+- 파일이 없으면 해당 요소를 중립값으로 대체한다.
 - 다운로드: `bash data_archive/scripts/download_living_population.sh`
 
-### 2.8 서울시 행정동 경계 + 도시계획 용도지역지구도 shapefile (선택)
+### 2.7 서울시 행정동 경계 + 도시계획 용도지역지구도 shapefile (선택)
 
 파일:
 
@@ -298,7 +294,7 @@ data_archive/raw/seoul_land_use_zone.zip         ← 용도지역지구도
 - 파일 또는 패키지가 없으면 건너뛰고 나머지 요소만으로 점수 계산한다.
 - 안내: `bash data_archive/scripts/download_gis_data.sh`
 
-### 2.9 행정동 → 법정동 코드 매핑 (선택)
+### 2.8 행정동 → 법정동 코드 매핑 (선택)
 
 파일:
 
@@ -314,7 +310,7 @@ data_archive/metadata/bjdong_admdong_mapping.csv
   - 예: `잠실6동` → `잠실동`, `성수2가3동` → `성수2가동`
 - 행정안전부/통계청 코드 대응표에서 준비: `bash data_archive/scripts/download_bjdong_mapping.sh`
 
-### 2.5 서울시 버스노선별 정류장별 시간대별 승하차 인원
+### 2.9 서울시 버스노선별 정류장별 시간대별 승하차 인원
 
 파일:
 

@@ -7,7 +7,7 @@
 ```text
 .
 ├── seoul_mobility_analysis.py      # 분석 스크립트 (로컬/Colab 공통)
-├── Seoul_Mobility_Full_Pipeline.ipynb  # Colab 전체 파이프라인 (다운로드 → 분석 → 시각화 → push)
+├── Seoul_Mobility_Full_Pipeline.ipynb  # Colab 전체 파이프라인 (다운로드 → 분석 → 시각화)
 ├── Seoul_Mobility_Colab.ipynb      # Colab 단순 연결용 (Drive에 데이터 미리 준비 후 실행)
 ├── ANALYSIS_FLOW.md                # 분석 방법론 상세 문서
 ├── data_archive/
@@ -28,13 +28,13 @@
 
 | 데이터 | 기간 | 역할 |
 |---|---|---|
-| 생활이동 일별 OD | 2026년 3월 (30일, 28일 제외) | **현재 시점 기준** — 후보 발굴, mobility_score, candidate_type 산출의 핵심 |
+| 생활이동 일별 OD | 2026년 3월 (30개 일자, 28일 제외) | **상세 분석 기준 월** — 후보 발굴, mobility_score, candidate_type 산출의 핵심 |
 | 생활이동 월말 스냅샷 | 2023년 1월 ~ 2026년 3월 (39개 파일) | **장기 추세** — 월별 순위, score_slope, trend_type (전체 월간 합계 아님) |
 | 지하철 승하차 | 2026년 4월 | 교통 보조 지표 (생활이동보다 한 달 뒤, 행정동 미결합) |
 | 버스 승하차 | 2026년 4월 | 교통 보조 지표 (생활이동보다 한 달 뒤, 행정동 미결합) |
 | 서울 시민생활 1인가구 | 2025년 12월 | 거주성 보정 기준 (생활이동보다 3개월 전 스냅샷) |
 
-**2026년 3월 한계**: 현재 상세 분석의 기반은 2026년 3월 30일치 일별 데이터입니다. 이후 월(4월, 5월 등)로 업데이트하려면 해당 월의 생활이동 일별 파일을 `data_archive/raw/`에 추가하고 `LIVING_MIGRATION_PATTERN`을 수정해야 합니다.
+**2026년 3월 한계**: 현재 상세 분석의 기반은 2026년 3월 30개 일자 데이터입니다. 이후 월(4월, 5월 등)로 업데이트하려면 해당 월의 생활이동 일별 파일을 `data_archive/raw/`에 추가하고 `LIVING_MIGRATION_PATTERN`을 수정해야 합니다.
 
 ## Archived Data
 
@@ -78,6 +78,7 @@ python3 seoul_mobility_analysis.py
 |---|---|---|
 | `SEOUL_RAW_DIR` | `data_archive/raw/` | 원천 파일 위치 |
 | `SEOUL_OUTPUT_DIR` | `output/` (스크립트 기준) | 결과 파일 저장 위치 |
+| `SEOUL_SKIP_GIT` | 미설정 | `1`이면 분석 후 자동 commit/push를 건너뜀 |
 
 ### Google Colab 실행
 
@@ -85,7 +86,7 @@ python3 seoul_mobility_analysis.py
 
 #### `Seoul_Mobility_Full_Pipeline.ipynb` (권장)
 
-데이터 다운로드부터 분석·시각화·GitHub push까지 한 번에 실행하는 완전 자동화 파이프라인입니다.
+데이터 다운로드부터 분석·시각화까지 한 번에 실행하는 자동화 파이프라인입니다. 분석 스크립트는 기본적으로 결과물 commit/push까지 시도하므로, 결과만 확인하려면 `SEOUL_SKIP_GIT=1`을 설정하세요.
 
 1. Google Drive 마운트
 2. GitHub에서 최신 코드 clone/pull
@@ -114,7 +115,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 !python3 /content/seoul_mobility/seoul_mobility_analysis.py
 ```
 
-분석 완료 후 `commit_outputs()`가 자동 실행되어 `output/` 하위 파일을 git 커밋하고 원격 저장소에 push합니다. `SEOUL_OUTPUT_DIR`이 repo 밖(Drive 경로)이면 git 스테이징 대상에서 벗어날 수 있으므로, 버전 관리가 필요하면 remote가 설정되어 있어야 합니다.
+분석 완료 후 기본적으로 `commit_outputs()`가 실행되어 repo 안 `output/` 하위 파일을 git 커밋하고 원격 저장소에 push합니다. `SEOUL_SKIP_GIT=1`을 설정하면 이 단계를 건너뜁니다. `SEOUL_OUTPUT_DIR`이 repo 밖(Drive 경로)이면 해당 Drive 결과물은 git 스테이징 대상이 아니므로, 버전 관리가 필요하면 결과 저장 경로를 repo 안으로 두고 remote를 설정해야 합니다.
 
 생성 결과는 `output/` 아래에 저장됩니다.
 
@@ -180,8 +181,8 @@ adjusted_mobility_score =
 거주성 분류 (`residential_filter`):
 
 - `방문성 검토`: 거주성 신호 약함 → 방문 상권 후보 (현재 데이터: 305개 동)
-- `혼재형 (상권+거주)`: 거주성 감점 후에도 `adjusted_mobility_score`가 전체 중앙값 이상 → 방문·거주 신호 공존. 현재 데이터에서는 거주성 감점(-0.7 × score)이 충분히 커 고거주성 동이 전부 중앙값 이하로 내려가므로 0개로 집계됨. 데이터나 계수 조정 시 나타날 수 있음.
-- `2030 자취/거주성 높음`: 거주성 강하고 방문 신호 상대적으로 약함 → 거주지 효과로 분리 (현재 데이터: 117개 동, 예: 신림동, 화양동, 안암동)
+- `혼재형 (상권+거주)`: 거주성 감점 후에도 `adjusted_mobility_score`가 전체 중앙값 이상 → 방문·거주 신호 공존 (현재 데이터: 48개 동)
+- `2030 자취/거주성 높음`: 거주성 강하고 방문 신호 상대적으로 약함 → 거주지 효과로 분리 (현재 데이터: 69개 동, 예: 신림동, 화양동, 안암동)
 
 후보 유형 (`candidate_type`):
 
@@ -198,7 +199,7 @@ adjusted_mobility_score =
 
 `data_archive/.env`에는 API 키가 들어 있으므로 Git에서 제외합니다. 공유할 때는 `data_archive/.env.example`만 사용하세요.
 
-`output/` 하위의 분석 결과물(`.md`, `.png`, `.csv`)은 분석 스크립트 실행 완료 시 `commit_outputs()`가 자동으로 git 커밋하고 원격 저장소에 push합니다. Colab에서 Drive 경로로 저장할 경우에는 git 스테이징 대상에서 벗어날 수 있으므로, 결과를 버전 관리하려면 `SEOUL_OUTPUT_DIR`을 repo 내 경로로 설정하거나 원격 저장소에 remote가 설정되어 있어야 합니다.
+`output/` 하위의 분석 결과물(`.md`, `.png`, `.csv`)은 분석 스크립트 실행 완료 시 기본적으로 `commit_outputs()`가 git 커밋하고 원격 저장소에 push합니다. 이 동작을 끄려면 `SEOUL_SKIP_GIT=1`을 설정하세요. Colab에서 Drive 경로로 저장할 경우 해당 Drive 결과물은 git 스테이징 대상에서 벗어나므로, 결과를 버전 관리하려면 `SEOUL_OUTPUT_DIR`을 repo 내 경로로 설정하고 원격 저장소 remote를 준비해야 합니다.
 
 원천 파일이 없는 새 환경에서는 아래 스크립트로 샘플 데이터를 다시 받을 수 있습니다.
 
