@@ -142,7 +142,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `monthly_living_migration_all_available_summary.csv` | 보유한 모든 일별 ZIP을 월별로 집계한 확장 요약 |
 | `monthly_visitor_candidate_summary.csv` | 월별 방문 상권 후보 |
 | `monthly_candidate_trend_summary.csv` | 장기 월별 강세 후보 트렌드 |
-| `candidate_explanations.csv` | 후보 지역별 자동 설명 요약 |
+| `candidate_explanations.csv` | 후보 지역별 상위/하위 자동 설명 요약 |
 | `transport_access_by_dong.csv` | 선택 좌표 파일이 있을 때 생성되는 행정동별 교통 접근성 지표 |
 
 **reports/**
@@ -155,7 +155,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `residential_dominant_2030_top20.md` | 2030 자취/거주성 분리 대상 Top 20 |
 | `monthly_visitor_candidate_latest_top20.md` | 최신 월 방문 상권 후보 Top 20 |
 | `monthly_candidate_trend_top20.md` | 장기 월별 강세 후보 Top 20 |
-| `candidate_explanation_report.md` | 후보 지역별 자동 설명 리포트 |
+| `candidate_explanation_report.md` | 후보 지역별 상위/하위 자동 설명 리포트 |
 | `interpretation_report.md` | 전체 결과 해석 보고서 |
 
 ## Current Scoring Logic

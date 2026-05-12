@@ -1657,50 +1657,75 @@ def dataframe_to_markdown(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-def build_candidate_explanations(dest: pd.DataFrame, top_n: int = 30) -> pd.DataFrame:
-    """Create short rule-based explanations for top candidate administrative dongs."""
+def build_candidate_explanations(dest: pd.DataFrame, top_n: int = 30, bottom_n: int = 5) -> pd.DataFrame:
+    """Create short rule-based explanations for top and bottom candidate dongs."""
     source = dest[
         dest["residential_filter"].isin(["방문성 검토", "혼재형 (상권+거주)"])
-    ].sort_values(["commercial_potential_score", "adjusted_mobility_score"], ascending=False)
+    ].copy()
+    if "commercial_potential_score" not in source.columns:
+        source["commercial_potential_score"] = source["adjusted_mobility_score"]
+    source = source.sort_values(["commercial_potential_score", "adjusted_mobility_score"], ascending=False)
+    thresholds = {
+        col: dest[col].quantile(q) if col in dest.columns else None
+        for col, q in [
+            ("origin_diversity", 0.75),
+            ("evening_2030_ratio", 0.75),
+            ("weekend_2030_ratio", 0.60),
+            ("share_2030", 0.75),
+            ("young_single_ratio", 0.75),
+        ]
+    }
     rows = []
-    for _, row in source.head(top_n).iterrows():
-        name = f"{row['d_gu_name']} {row['d_admdong_name']}"
-        signals = []
-        cautions = []
+    slices = [
+        ("상위", source.head(top_n)),
+        ("하위", source.tail(bottom_n).sort_values(["commercial_potential_score", "adjusted_mobility_score"])),
+    ]
+    for group, group_df in slices:
+        for rank, (_, row) in enumerate(group_df.iterrows(), start=1):
+            name = f"{row['d_gu_name']} {row['d_admdong_name']}"
+            signals = []
+            cautions = []
 
-        if row.get("origin_diversity", 0) >= dest["origin_diversity"].quantile(0.75):
-            signals.append("출발지 다양성이 높아 광역 유입 신호가 강함")
-        if row.get("evening_2030_ratio", 0) >= dest["evening_2030_ratio"].quantile(0.75):
-            signals.append("저녁 시간대 2030 도착 비중이 높음")
-        if row.get("weekend_2030_ratio", 0) >= dest["weekend_2030_ratio"].quantile(0.60):
-            signals.append("주말 방문 비중이 상대적으로 높음")
-        if row.get("share_2030", 0) >= dest["share_2030"].quantile(0.75):
-            signals.append("전체 이동 중 2030 비중이 높음")
-        if row.get("residential_filter") == "혼재형 (상권+거주)":
-            cautions.append("거주성 신호도 함께 강해 소비·점포 데이터로 추가 확인 필요")
-        if row.get("young_single_ratio", 0) >= dest["young_single_ratio"].quantile(0.75):
-            cautions.append("2030 1인가구 비율이 높아 자취/생활권 효과가 섞일 수 있음")
-        if not signals:
-            signals.append("보정 이동 점수 기준 상위권이나 세부 패턴은 추가 확인 필요")
-        if not cautions:
-            cautions.append("현재 이동 데이터 기준의 1차 후보이며 매출·용도지역 결합 시 재평가 필요")
-        signal_text = " ".join(f"{signal}." for signal in signals)
-        caution_text = " ".join(f"{caution}." for caution in cautions)
+            if thresholds["origin_diversity"] is not None and row.get("origin_diversity", 0) >= thresholds["origin_diversity"]:
+                signals.append("출발지 다양성이 높아 광역 유입 신호가 강함")
+            if thresholds["evening_2030_ratio"] is not None and row.get("evening_2030_ratio", 0) >= thresholds["evening_2030_ratio"]:
+                signals.append("저녁 시간대 2030 도착 비중이 높음")
+            if thresholds["weekend_2030_ratio"] is not None and row.get("weekend_2030_ratio", 0) >= thresholds["weekend_2030_ratio"]:
+                signals.append("주말 방문 비중이 상대적으로 높음")
+            if thresholds["share_2030"] is not None and row.get("share_2030", 0) >= thresholds["share_2030"]:
+                signals.append("전체 이동 중 2030 비중이 높음")
+            if row.get("residential_filter") == "혼재형 (상권+거주)":
+                cautions.append("거주성 신호도 함께 강해 소비·점포 데이터로 추가 확인 필요")
+            if thresholds["young_single_ratio"] is not None and row.get("young_single_ratio", 0) >= thresholds["young_single_ratio"]:
+                cautions.append("2030 1인가구 비율이 높아 자취/생활권 효과가 섞일 수 있음")
+            if not signals:
+                if group == "하위":
+                    signals.append("방문성 후보군 안에서는 보정 이동 점수가 낮아 우선순위가 낮음")
+                else:
+                    signals.append("보정 이동 점수 기준 상위권이나 세부 패턴은 추가 확인 필요")
+            if not cautions:
+                if group == "하위":
+                    cautions.append("현재 기준에서는 적극 후보보다 비교·제외 후보로 보는 것이 적절함")
+                else:
+                    cautions.append("현재 이동 데이터 기준의 1차 후보이며 매출·용도지역 결합 시 재평가 필요")
+            signal_text = " ".join(f"{signal}." for signal in signals)
+            caution_text = " ".join(f"{caution}." for caution in cautions)
 
-        rows.append(
-            {
-                "rank": len(rows) + 1,
-                "d_gu_name": row["d_gu_name"],
-                "d_admdong_name": row["d_admdong_name"],
-                "residential_filter": row["residential_filter"],
-                "candidate_type": row["candidate_type"],
-                "visit_pattern_type": row.get("visit_pattern_type", "불명확"),
-                "commercial_potential_score": row.get("commercial_potential_score", row["adjusted_mobility_score"]),
-                "adjusted_mobility_score": row["adjusted_mobility_score"],
-                "summary": f"{name}은 {row['candidate_type']} 후보입니다. {signal_text}",
-                "caution": caution_text,
-            }
-        )
+            rows.append(
+                {
+                    "rank_group": group,
+                    "rank": rank,
+                    "d_gu_name": row["d_gu_name"],
+                    "d_admdong_name": row["d_admdong_name"],
+                    "residential_filter": row["residential_filter"],
+                    "candidate_type": row["candidate_type"],
+                    "visit_pattern_type": row.get("visit_pattern_type", "불명확"),
+                    "commercial_potential_score": row.get("commercial_potential_score", row["adjusted_mobility_score"]),
+                    "adjusted_mobility_score": row["adjusted_mobility_score"],
+                    "summary": f"{name}은 {row['candidate_type']} 후보입니다. {signal_text}",
+                    "caution": caution_text,
+                }
+            )
     return pd.DataFrame(rows)
 
 
@@ -1709,16 +1734,23 @@ def write_candidate_explanation_report(explanations: pd.DataFrame) -> None:
     if explanations.empty:
         return
     sections = ["# 후보 지역별 자동 설명 리포트\n"]
-    for _, row in explanations.iterrows():
-        sections.append(
-            "\n"
-            f"## {int(row['rank'])}. {row['d_gu_name']} {row['d_admdong_name']}\n\n"
-            f"- 분류: {row['residential_filter']} / {row['candidate_type']} / {row['visit_pattern_type']}\n"
-            f"- 점수: commercial_potential_score {row['commercial_potential_score']:.3f}, "
-            f"adjusted_mobility_score {row['adjusted_mobility_score']:.3f}\n"
-            f"- 해석: {row['summary']}\n"
-            f"- 주의: {row['caution']}\n"
-        )
+    for group, title in [("상위", "상위 후보"), ("하위", "하위 후보")]:
+        group_df = explanations[explanations["rank_group"] == group].copy()
+        if group_df.empty:
+            continue
+        sections.append(f"\n# {title}\n")
+        if group == "하위":
+            group_df = group_df.head(5)
+        for _, row in group_df.iterrows():
+            sections.append(
+                "\n"
+                f"## {row['rank_group']} {int(row['rank'])}. {row['d_gu_name']} {row['d_admdong_name']}\n\n"
+                f"- 분류: {row['residential_filter']} / {row['candidate_type']} / {row['visit_pattern_type']}\n"
+                f"- 점수: commercial_potential_score {row['commercial_potential_score']:.3f}, "
+                f"adjusted_mobility_score {row['adjusted_mobility_score']:.3f}\n"
+                f"- 해석: {row['summary']}\n"
+                f"- 주의: {row['caution']}\n"
+            )
     (REPORTS_DIR / "candidate_explanation_report.md").write_text("\n".join(sections), encoding="utf-8")
 
 
@@ -1864,7 +1896,12 @@ def write_monthly_reports(monthly: pd.DataFrame, trend: pd.DataFrame) -> None:
         "아래 표는 최신 월 스냅샷에서 2030 자취/거주성 보정 후 방문성이 높게 남은 행정동입니다. "
         "혼재형 (상권+거주)도 방문 신호가 살아있으므로 함께 포함했습니다."
         f"{weekend_note}\n\n"
+        "## 상위 20\n\n"
         f"{dataframe_to_markdown(latest.head(20)[latest_cols])}\n"
+        "\n## 하위 5\n\n"
+        "같은 방문성 후보군 안에서 보정 점수가 낮은 비교군입니다. 적극 후보라기보다 우선순위 조정과 "
+        "제외 판단에 참고합니다.\n\n"
+        f"{dataframe_to_markdown(latest.tail(5).sort_values('adjusted_mobility_score')[latest_cols])}\n"
     )
     trend_report = (
         "# 장기 월별 강세 후보 Top 20\n\n"
