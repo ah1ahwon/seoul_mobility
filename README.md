@@ -101,14 +101,15 @@ python3 seoul_mobility_analysis.py
 
 #### `Seoul_Mobility_Full_Pipeline.ipynb` (권장)
 
-데이터 다운로드부터 분석·시각화까지 한 번에 실행하는 자동화 파이프라인입니다. 분석 스크립트는 기본적으로 결과물 commit/push까지 시도하므로, 결과만 확인하려면 `SEOUL_SKIP_GIT=1`을 설정하세요.
+데이터 다운로드부터 분석·시각화까지 한 번에 실행하는 자동화 파이프라인입니다. GIS/좌표/법정동 파일은 Step 4-6에서 직접 URL을 넣어 다운로드하거나 Colab 업로드 창으로 준비합니다. 분석 스크립트는 기본적으로 결과물 commit/push까지 시도하므로, 결과만 확인하려면 `SEOUL_SKIP_GIT=1`을 설정하세요.
 
 1. Google Drive 마운트
 2. GitHub에서 최신 코드 clone/pull
 3. 서울 열린데이터광장에서 직접 데이터 다운로드 (약 3 GB, 72개 파일) → Drive 저장
 4. 불량 ZIP 파일 자동 감지·삭제
-5. `seoul_mobility_analysis.py` 실행
-6. 7개 시각화 차트 생성
+5. 필수 GIS·좌표·법정동 파일 준비
+6. `seoul_mobility_analysis.py` 실행
+7. 7개 시각화 차트 생성
 
 아래 URL에서 직접 열 수 있습니다.
 
