@@ -365,6 +365,16 @@ https://data.seoul.go.kr/dataList/OA-12913/S/1/datasetView.do
 
 분석 시작 직후 필수 입력 파일을 먼저 확인한다. 매출, 생활인구, GIS, 법정동 매핑, 역·정류장 좌표가 없으면 대용량 생활이동 ZIP을 읽기 전에 중단하고 누락 목록과 준비 스크립트를 출력한다. 개발용 부분 실행이 필요할 때만 `SEOUL_ALLOW_PARTIAL=1`을 사용한다.
 
+Colab 전체 파이프라인에서는 Step 4-6에서 GIS/좌표/법정동 파일을 준비한다. 직접 다운로드 URL이 있으면 `REQUIRED_FILE_URLS`에 넣고, 없으면 Colab 업로드 창으로 다음 파일명을 맞춰 올린다.
+
+```text
+seoul_land_use_zone.zip
+seoul_admin_dong_boundary.zip
+subway_station_coordinates.csv
+bus_stop_coordinates.csv
+bjdong_admdong_mapping.csv
+```
+
 ### Step 1. 원천 데이터 아카이빙
 
 `data_archive/raw/`에 원천 데이터를 로컬 보관한다.
