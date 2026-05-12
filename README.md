@@ -56,6 +56,18 @@
 - `seoul_living_interest_groups_202512.xlsx`
   - 서울 시민생활 데이터 행정동단위 10개 관심집단수, 2025년 12월
   - 2030 1인가구 거주성 보정용
+- `seoul_commercial_sales_latest.csv`
+  - 행정동별 추정매출, `commercial_potential_score` 필수 레이어
+- `seoul_living_population_latest.csv`
+  - 행정동별 시간대별 생활인구, 낮/심야 2030 유입 비율 계산용
+- `seoul_land_use_zone.zip`, `seoul_admin_dong_boundary.zip`
+  - 용도지역·행정동 경계 공간 결합 필수 레이어
+- `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`
+  - 역·정류장 좌표와 행정동 경계 공간 결합용
+- `data_archive/metadata/bjdong_admdong_mapping.csv`
+  - 행정동-법정동 공식 매핑 파일
+
+위 필수 레이어가 없으면 기본 실행은 중단됩니다. 개발용 부분 실행이 필요할 때만 `SEOUL_ALLOW_PARTIAL=1`을 사용하세요.
 
 ## Setup
 
@@ -79,6 +91,7 @@ python3 seoul_mobility_analysis.py
 | `SEOUL_RAW_DIR` | `data_archive/raw/` | 원천 파일 위치 |
 | `SEOUL_OUTPUT_DIR` | `output/` (스크립트 기준) | 결과 파일 저장 위치 |
 | `SEOUL_SKIP_GIT` | 미설정 | `1`이면 분석 후 자동 commit/push를 건너뜀 |
+| `SEOUL_ALLOW_PARTIAL` | 미설정 | 개발용. `1`이면 필수 레이어 누락 시 부분 실행 허용 |
 
 ### Google Colab 실행
 
@@ -143,7 +156,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `monthly_visitor_candidate_summary.csv` | 월별 방문 상권 후보 |
 | `monthly_candidate_trend_summary.csv` | 장기 월별 강세 후보 트렌드 |
 | `candidate_explanations.csv` | 후보 지역별 상위/하위 자동 설명 요약 |
-| `transport_access_by_dong.csv` | 선택 좌표 파일이 있을 때 생성되는 행정동별 교통 접근성 지표 |
+| `transport_access_by_dong.csv` | 역·정류장 좌표와 행정동 경계를 결합한 행정동별 교통 접근성 지표 |
 
 **reports/**
 
