@@ -153,7 +153,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `visitor_candidate_top20.md` | 방문 상권 후보 Top 20 |
 | `mixed_commercial_residential_top20.md` | 혼재형 후보 Top 20 |
 | `residential_dominant_2030_top20.md` | 2030 자취/거주성 분리 대상 Top 20 |
-| `monthly_visitor_candidate_latest_top20.md` | 최신 월 방문 상권 후보 Top 20 |
+| `monthly_visitor_candidate_latest_top20.md` | 최신 월 방문 상권 후보 상위 20 + 하위 5 |
 | `monthly_candidate_trend_top20.md` | 장기 월별 강세 후보 Top 20 |
 | `candidate_explanation_report.md` | 후보 지역별 상위/하위 자동 설명 리포트 |
 | `interpretation_report.md` | 전체 결과 해석 보고서 |
