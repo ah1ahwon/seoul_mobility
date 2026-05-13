@@ -1,5 +1,6 @@
 dataset_id,dataset_name,source_url,download_type,local_metadata,refresh_note,analysis_role
 OA-22299,"수도권 생활이동 (연령별, 출발-도착지 기준)-내국인 목적별",https://data.seoul.go.kr/dataList/OA-22299/F/1/datasetView.do,file_download,OA-22299_capital_living_migration_age_od_purpose_page.html,"daily files; page observed through 2026-03-31","primary OD dataset for 2030 purpose-based mobility"
+OA-22298,"수도권 생활이동 (성 연령별, 도착지 기준)-내국인",https://data.seoul.go.kr/dataList/OA-22298/F/1/datasetView.do,file_download,,"monthly files; 20s/30s/40s/50s separated by sex","separated age-band destination analysis"
 OA-22658,"수도권 생활이동 (연령대별 출도착 행정동별 수단 데이터)-내국인",https://data.seoul.go.kr/dataList/OA-22658/F/1/datasetView.do,file_download,capital_region_living_migration_landing.html,"related dataset; not downloaded yet","optional mode split for transport-mode analysis"
 OA-12914,"서울시 지하철호선별 역별 승하차 인원 정보",https://data.seoul.go.kr/dataList/OA-12914/S/1/datasetView.do,file_download,OA-12914_subway_page.html,"daily source, monthly files; latest archived file 2026-04","station-area traffic trend"
 OA-12913,"서울시 버스노선별 정류장별 시간대별 승하차 인원 정보",https://data.seoul.go.kr/dataList/OA-12913/S/1/datasetView.do,file_download,OA-12913_bus_page.html,"monthly files; latest archived file 2026-04","hourly stop-level access and activity peaks"
