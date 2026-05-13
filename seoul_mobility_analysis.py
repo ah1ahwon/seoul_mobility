@@ -64,6 +64,7 @@ REPORTS_DIR = OUTPUT_ROOT / "reports"
 SUBWAY_CSV = RAW_DIR / "CARD_SUBWAY_MONTH_202604.csv"
 BUS_CSV = RAW_DIR / "bus_time_station_202604.csv"
 LIVING_MIGRATION_PATTERN = "seoul_purpose_admdong4_in_202603*.zip"
+AGE_GENDER_DESTINATION_PATTERN = "seoul_purpose_admdong1_in_*.zip"
 LIVING_MIGRATION_MONTH_END_MANIFEST = ARCHIVE_DIR / "metadata" / "living_migration_month_end_manifest.csv"
 ADMIN_DONG_AREA_ZIP = RAW_DIR / "seoul_admin_dong_area.zip"
 LIVING_INTEREST_XLSX = RAW_DIR / "seoul_living_interest_groups_202512.xlsx"
@@ -88,6 +89,19 @@ SUBWAY_STATION_COORD_CSV = RAW_DIR / "subway_station_coordinates.csv"
 BUS_STOP_COORD_CSV = RAW_DIR / "bus_stop_coordinates.csv"
 
 ADMDONG_CODE_CSV = ARCHIVE_DIR / "metadata" / "seoul_admdong_code.csv"
+
+
+AGE_GROUP_SPECS = [
+    ("age_00", "10대 미만", ["male_00_cnt", "feml_00_cnt"]),
+    ("age_10", "10대", ["male_10_cnt", "feml_10_cnt"]),
+    ("age_20", "20대", ["male_20_cnt", "feml_20_cnt"]),
+    ("age_30", "30대", ["male_30_cnt", "feml_30_cnt"]),
+    ("age_40", "40대", ["male_40_cnt", "feml_40_cnt"]),
+    ("age_50", "50대", ["male_50_cnt", "feml_50_cnt"]),
+    ("age_60", "60대", ["male_60_cnt", "feml_60_cnt"]),
+    ("age_70plus", "70대 이상", ["male_70_cnt", "feml_70_cnt"]),
+]
+AGE_GROUP_ORDER = {code: i for i, (code, _, _) in enumerate(AGE_GROUP_SPECS)}
 
 
 def _load_admdong_codes() -> tuple[dict[str, str], dict[str, str]]:
@@ -495,6 +509,11 @@ def get_all_living_migration_paths() -> list[Path]:
     return paths
 
 
+def get_age_gender_destination_paths() -> list[Path]:
+    """Return monthly destination-based age/gender living-migration ZIP files if present."""
+    return sorted(RAW_DIR.glob(AGE_GENDER_DESTINATION_PATTERN))
+
+
 def summarize_living_migration(
     input_paths: list[Path] | None = None,
     chunksize: int = 500_000,
@@ -840,6 +859,188 @@ def summarize_living_migration_monthly_all_available(
     coverage["coverage_ratio"] = coverage["date_count"] / coverage["expected_days"]
     coverage["missing_days_count"] = (coverage["expected_days"] - coverage["date_count"]).clip(lower=0)
     return summary.merge(coverage, on=["yyyymm", "date_count"], how="left")
+
+
+def summarize_age_gender_destination_migration(
+    input_paths: list[Path] | None = None,
+    chunksize: int = 500_000,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Summarize OA-22298 destination-based living migration by separated age bands.
+
+    This source provides destination/time/purpose counts split by sex and decade
+    age bands. It does not include origin administrative dong, so origin diversity
+    is intentionally not calculated here.
+    """
+    if input_paths is None:
+        input_paths = get_age_gender_destination_paths()
+    if not input_paths:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    base_cols = ["d_admdong_cd", "time_cd", "move_purpose", "total_cnt", "etl_ymd"]
+    age_cols = [col for _, _, cols in AGE_GROUP_SPECS for col in cols]
+    usecols = base_cols + age_cols
+
+    dest_parts = []
+    hourly_parts = []
+    purpose_parts = []
+    total_parts = []
+    date_parts = []
+
+    for input_path in input_paths:
+        try:
+            zf = zipfile.ZipFile(input_path)
+        except zipfile.BadZipFile:
+            print(f"   WARNING: skipping invalid age-gender ZIP: {input_path.name}")
+            continue
+
+        with zf:
+            csv_names = [name for name in zf.namelist() if name.lower().endswith(".csv")]
+            if not csv_names:
+                print(f"   WARNING: no CSV files in age-gender ZIP: {input_path.name}")
+                continue
+
+            print(f"   reading age-gender destination migration: {input_path.name}")
+            for csv_name in csv_names:
+                with zf.open(csv_name) as csv_file:
+                    for chunk in pd.read_csv(
+                        csv_file,
+                        usecols=usecols,
+                        dtype={
+                            "d_admdong_cd": "string",
+                            "time_cd": "string",
+                            "move_purpose": "string",
+                            "etl_ymd": "string",
+                        },
+                        chunksize=chunksize,
+                    ):
+                        chunk["yyyymm"] = chunk["etl_ymd"].astype(str).str[:6]
+                        for col in ["total_cnt", *age_cols]:
+                            chunk[col] = pd.to_numeric(chunk[col], errors="coerce").fillna(0.0)
+
+                        _hour = chunk["time_cd"].astype(str).str.zfill(2)
+                        _etl_dt = pd.to_datetime(chunk["etl_ymd"].astype(str), format="%Y%m%d", errors="coerce")
+                        _wday = _etl_dt.dt.dayofweek
+
+                        total_parts.append(
+                            chunk.groupby(["yyyymm", "d_admdong_cd"], as_index=False).agg(
+                                total_cnt=("total_cnt", "sum"),
+                                row_count=("d_admdong_cd", "size"),
+                            )
+                        )
+                        date_parts.append(
+                            chunk.loc[chunk["total_cnt"] > 0, ["yyyymm", "d_admdong_cd", "etl_ymd"]]
+                            .drop_duplicates()
+                        )
+
+                        for age_code, age_label, cols in AGE_GROUP_SPECS:
+                            chunk["_age_cnt"] = chunk[cols].sum(axis=1)
+                            chunk["_evening_cnt"] = np.where(
+                                _hour.isin(["18", "19", "20", "21", "22", "23"]),
+                                chunk["_age_cnt"],
+                                0.0,
+                            )
+                            chunk["_morning_cnt"] = np.where(_hour.isin(["06", "07", "08"]), chunk["_age_cnt"], 0.0)
+                            chunk["_afternoon_cnt"] = np.where(
+                                _hour.isin([f"{h:02d}" for h in range(9, 18)]),
+                                chunk["_age_cnt"],
+                                0.0,
+                            )
+                            chunk["_late_night_cnt"] = np.where(
+                                _hour.isin(["23", "00", "01", "02", "03", "04", "05"]),
+                                chunk["_age_cnt"],
+                                0.0,
+                            )
+                            chunk["_weekday_cnt"] = np.where(_wday <= 3, chunk["_age_cnt"], 0.0)
+                            chunk["_friday_cnt"] = np.where(_wday == 4, chunk["_age_cnt"], 0.0)
+                            chunk["_weekend_cnt"] = np.where(_wday >= 5, chunk["_age_cnt"], 0.0)
+
+                            keys = ["yyyymm", "d_admdong_cd"]
+                            dest_part = chunk.groupby(keys, as_index=False).agg(
+                                age_cnt=("_age_cnt", "sum"),
+                                evening_cnt=("_evening_cnt", "sum"),
+                                morning_cnt=("_morning_cnt", "sum"),
+                                afternoon_cnt=("_afternoon_cnt", "sum"),
+                                late_night_cnt=("_late_night_cnt", "sum"),
+                                weekday_cnt=("_weekday_cnt", "sum"),
+                                friday_cnt=("_friday_cnt", "sum"),
+                                weekend_cnt=("_weekend_cnt", "sum"),
+                            )
+                            dest_part["age_group"] = age_code
+                            dest_part["age_group_label"] = age_label
+                            dest_parts.append(dest_part)
+
+                            hourly_part = chunk.groupby(keys + ["time_cd"], as_index=False).agg(
+                                age_cnt=("_age_cnt", "sum")
+                            )
+                            hourly_part["age_group"] = age_code
+                            hourly_part["age_group_label"] = age_label
+                            hourly_parts.append(hourly_part)
+
+                            purpose_part = chunk.groupby(keys + ["move_purpose"], as_index=False).agg(
+                                age_cnt=("_age_cnt", "sum")
+                            )
+                            purpose_part["age_group"] = age_code
+                            purpose_part["age_group_label"] = age_label
+                            purpose_parts.append(purpose_part)
+
+    if not dest_parts:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    dest = pd.concat(dest_parts, ignore_index=True)
+    dest = dest.groupby(["yyyymm", "d_admdong_cd", "age_group", "age_group_label"], as_index=False).sum(
+        numeric_only=True
+    )
+
+    totals = pd.concat(total_parts, ignore_index=True)
+    totals = totals.groupby(["yyyymm", "d_admdong_cd"], as_index=False).sum(numeric_only=True)
+    dates = pd.concat(date_parts, ignore_index=True).drop_duplicates()
+    date_counts = dates.groupby(["yyyymm", "d_admdong_cd"], as_index=False).agg(
+        active_days=("etl_ymd", "nunique")
+    )
+
+    dest = dest.merge(totals, on=["yyyymm", "d_admdong_cd"], how="left")
+    dest = dest.merge(date_counts, on=["yyyymm", "d_admdong_cd"], how="left")
+    dest["active_days"] = dest["active_days"].fillna(0).astype("int64")
+    dest["avg_daily_age_cnt"] = np.where(dest["active_days"] > 0, dest["age_cnt"] / dest["active_days"], 0.0)
+    dest["age_share"] = np.where(dest["total_cnt"] > 0, dest["age_cnt"] / dest["total_cnt"], 0.0)
+
+    for ratio_col, cnt_col in [
+        ("evening_ratio", "evening_cnt"),
+        ("morning_ratio", "morning_cnt"),
+        ("afternoon_ratio", "afternoon_cnt"),
+        ("late_night_ratio", "late_night_cnt"),
+        ("weekday_ratio", "weekday_cnt"),
+        ("friday_ratio", "friday_cnt"),
+        ("weekend_ratio", "weekend_cnt"),
+    ]:
+        dest[ratio_col] = np.where(dest["age_cnt"] > 0, dest[cnt_col] / dest["age_cnt"], 0.0)
+
+    dest["age_mobility_score"] = (
+        zscore_by_group(dest, "age_group", np.log1p(dest["age_cnt"]))
+        + zscore_by_group(dest, "age_group", dest["age_share"])
+        + zscore_by_group(dest, "age_group", dest["evening_ratio"])
+    )
+    dest["age_group_order"] = dest["age_group"].map(AGE_GROUP_ORDER).fillna(99).astype("int64")
+
+    hourly = pd.concat(hourly_parts, ignore_index=True)
+    hourly = hourly.groupby(
+        ["yyyymm", "d_admdong_cd", "age_group", "age_group_label", "time_cd"],
+        as_index=False,
+    ).sum(numeric_only=True)
+    hourly["age_group_order"] = hourly["age_group"].map(AGE_GROUP_ORDER).fillna(99).astype("int64")
+
+    purpose = pd.concat(purpose_parts, ignore_index=True)
+    purpose = purpose.groupby(
+        ["yyyymm", "d_admdong_cd", "age_group", "age_group_label", "move_purpose"],
+        as_index=False,
+    ).sum(numeric_only=True)
+    purpose["age_group_order"] = purpose["age_group"].map(AGE_GROUP_ORDER).fillna(99).astype("int64")
+
+    dest = dest.sort_values(["age_group_order", "yyyymm", "age_mobility_score"], ascending=[True, True, False])
+    hourly = hourly.sort_values(["age_group_order", "yyyymm", "d_admdong_cd", "time_cd"])
+    purpose = purpose.sort_values(["age_group_order", "yyyymm", "d_admdong_cd", "move_purpose"])
+    return dest, hourly, purpose
 
 
 def classify_candidate(row: pd.Series, quantiles: dict[str, float]) -> str:
@@ -1382,6 +1583,62 @@ def enrich_monthly_destination_summary(dest: pd.DataFrame, admin_mapping: pd.Dat
     for _, month_df in dest.groupby("yyyymm", sort=True):
         enriched_parts.append(enrich_destination_summary(month_df, admin_mapping))
     return pd.concat(enriched_parts, ignore_index=True)
+
+
+def enrich_age_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) -> pd.DataFrame:
+    if dest.empty:
+        return dest
+
+    enriched = dest.copy()
+    enriched["d_admdong_cd"] = enriched["d_admdong_cd"].astype(str)
+    enriched = enriched[enriched["d_admdong_cd"].str.startswith("11")].copy()
+    enriched["d_gu_cd"] = enriched["d_admdong_cd"].str[:5]
+    enriched["d_gu_name"] = enriched["d_gu_cd"].map(SEOUL_GU_CODE_TO_NAME)
+
+    mapping = admin_mapping.rename(
+        columns={
+            "admdong_cd": "d_admdong_cd",
+            "admdong_name": "d_admdong_name",
+            "center_x": "d_center_x",
+            "center_y": "d_center_y",
+            "area_sqm": "d_area_sqm",
+        }
+    )
+    enriched = enriched.merge(
+        mapping[["d_admdong_cd", "d_admdong_name", "d_center_x", "d_center_y", "d_area_sqm"]],
+        on="d_admdong_cd",
+        how="left",
+    )
+    enriched = enriched[enriched["d_admdong_name"].notna()].copy()
+
+    front_cols = [
+        "yyyymm",
+        "d_admdong_cd",
+        "d_gu_name",
+        "d_admdong_name",
+        "age_group",
+        "age_group_label",
+        "age_mobility_score",
+        "age_cnt",
+        "avg_daily_age_cnt",
+        "age_share",
+        "active_days",
+        "evening_ratio",
+        "morning_ratio",
+        "afternoon_ratio",
+        "late_night_ratio",
+        "weekday_ratio",
+        "friday_ratio",
+        "weekend_ratio",
+        "total_cnt",
+        "d_center_x",
+        "d_center_y",
+    ]
+    actual_front_cols = [col for col in front_cols if col in enriched.columns]
+    other_cols = [col for col in enriched.columns if col not in actual_front_cols]
+    return enriched[actual_front_cols + other_cols].sort_values(
+        ["age_group_order", "yyyymm", "age_mobility_score"], ascending=[True, True, False]
+    )
 
 
 def add_residential_adjustment(dest: pd.DataFrame, residential: pd.DataFrame) -> pd.DataFrame:
@@ -2005,6 +2262,47 @@ def write_monthly_reports(monthly: pd.DataFrame, trend: pd.DataFrame) -> None:
     )
 
 
+def write_age_group_reports(age_dest: pd.DataFrame) -> None:
+    if age_dest.empty:
+        return
+
+    latest_month = age_dest["yyyymm"].max()
+    latest = age_dest[age_dest["yyyymm"] == latest_month].copy()
+    cols = [
+        "yyyymm",
+        "age_group_label",
+        "d_gu_name",
+        "d_admdong_name",
+        "age_mobility_score",
+        "age_cnt",
+        "avg_daily_age_cnt",
+        "age_share",
+        "evening_ratio",
+        "weekend_ratio",
+    ]
+    available_cols = [col for col in cols if col in latest.columns]
+
+    sections = [
+        f"# 연령대별 생활이동 도착지 Top 20 - {latest_month}\n\n"
+        "OA-22298 성·연령별 도착지 기준 생활이동 데이터를 사용했습니다. "
+        "이 데이터는 20대, 30대, 40대, 50대, 60대, 70대 이상을 분리해서 볼 수 있지만 "
+        "출발 행정동 정보는 없어 origin diversity는 계산하지 않습니다.\n"
+    ]
+    for _, age_label, _ in AGE_GROUP_SPECS:
+        part = latest[latest["age_group_label"] == age_label].sort_values(
+            "age_mobility_score",
+            ascending=False,
+        )
+        if part.empty:
+            continue
+        sections.append(f"\n## {age_label}\n\n{dataframe_to_markdown(part.head(20)[available_cols])}\n")
+
+    (REPORTS_DIR / "age_group_destination_top20.md").write_text(
+        "\n".join(sections),
+        encoding="utf-8",
+    )
+
+
 def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame, bus_stop: pd.DataFrame) -> None:
     type_counts = dest["candidate_type"].value_counts().reset_index()
     type_counts.columns = ["candidate_type", "dong_count"]
@@ -2228,6 +2526,26 @@ def run_all() -> None:
     monthly_all = add_residential_adjustment(monthly_all, residential)
     monthly_all_path = PROCESSED_DIR / "monthly_living_migration_all_available_summary.csv"
     monthly_all.to_csv(monthly_all_path, index=False, encoding="utf-8-sig")
+
+    print("3-1c. Analyzing separated age-band destination migration...")
+    age_dest, age_hourly, age_purpose = summarize_age_gender_destination_migration()
+    age_dest_path = PROCESSED_DIR / "living_migration_age_destination_summary.csv"
+    age_hourly_path = PROCESSED_DIR / "living_migration_age_hourly_summary.csv"
+    age_purpose_path = PROCESSED_DIR / "living_migration_age_purpose_summary.csv"
+    if age_dest.empty:
+        print(
+            "   skipped: OA-22298 age/gender destination ZIP 없음 "
+            f"({RAW_DIR / AGE_GENDER_DESTINATION_PATTERN})"
+        )
+    else:
+        age_dest = enrich_age_destination_summary(age_dest, admin_mapping)
+        age_dest.to_csv(age_dest_path, index=False, encoding="utf-8-sig")
+        age_hourly.to_csv(age_hourly_path, index=False, encoding="utf-8-sig")
+        age_purpose.to_csv(age_purpose_path, index=False, encoding="utf-8-sig")
+        write_age_group_reports(age_dest)
+        print(f"   saved: {age_dest_path} ({len(age_dest):,} rows)")
+        print(f"   saved: {age_hourly_path} ({len(age_hourly):,} rows)")
+        print(f"   saved: {age_purpose_path} ({len(age_purpose):,} rows)")
 
     print("4. Creating transport support summaries and interpretation report...")
     subway_station, bus_stop, bus_hour = summarize_transport_patterns(subway, bus_summary, bus_hourly)

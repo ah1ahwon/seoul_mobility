@@ -51,6 +51,10 @@
   - 2023년 1월~2026년 3월 월말 스냅샷 39개 파일
   - `data_archive/metadata/living_migration_month_end_manifest.csv` 기준으로 아카이빙
   - 장기 월별 추세 분석용이며, 전체 일별 월간 합계가 아니라 각 월의 월말 대표일 비교
+- `seoul_purpose_admdong1_in_YYYYMM.zip`
+  - 수도권 생활이동 성·연령별 도착지 기준, 내국인 목적별 월별 파일
+  - 10대 미만, 10대, 20대, 30대, 40대, 50대, 60대, 70대 이상 분리 분석용
+  - 출발 행정동은 포함하지 않아 origin diversity는 계산하지 않음
 - `seoul_admin_dong_area.zip`
   - 서울시 상권분석서비스 영역-행정동, 행정동 코드/명칭 매핑용
 - `seoul_living_interest_groups_202512.xlsx`
@@ -163,6 +167,9 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `monthly_living_migration_all_available_summary.csv` | 보유한 모든 일별 ZIP을 월별로 집계한 확장 요약 (`coverage_ratio`, `missing_days_count` 포함) |
 | `monthly_visitor_candidate_summary.csv` | 월별 방문 상권 후보 |
 | `monthly_candidate_trend_summary.csv` | 장기 월별 강세 후보 트렌드 |
+| `living_migration_age_destination_summary.csv` | 10대/20대/30대/40대/50대/60대/70대 이상 도착지별 연령대 분리 요약 |
+| `living_migration_age_hourly_summary.csv` | 연령대별 행정동·시간대 요약 |
+| `living_migration_age_purpose_summary.csv` | 연령대별 행정동·이동목적 요약 |
 | `candidate_explanations.csv` | 후보 지역별 상위/하위 자동 설명 요약 |
 | `transport_access_by_dong.csv` | 역·정류장 좌표와 행정동 경계를 결합한 행정동별 교통 접근성 지표 |
 
@@ -176,6 +183,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `residential_dominant_2030_top20.md` | 2030 자취/거주성 분리 대상 Top 20 |
 | `monthly_visitor_candidate_latest_top20.md` | 최신 월 방문 상권 후보 상위 20 + 하위 5 |
 | `monthly_candidate_trend_top20.md` | 장기 월별 강세 후보 Top 20 |
+| `age_group_destination_top20.md` | 연령대별 도착지 Top 20 |
 | `candidate_explanation_report.md` | 후보 지역별 상위/하위 자동 설명 리포트 |
 | `interpretation_report.md` | 전체 결과 해석 보고서 |
 
@@ -248,6 +256,18 @@ bash data_archive/scripts/download_living_migration_daily_range.sh
 
 ```bash
 START_DATE=2025-01-01 END_DATE=2025-12-31 bash data_archive/scripts/download_living_migration_daily_range.sh
+```
+
+20대, 30대, 40대, 50대처럼 연령대를 분리하려면 성·연령별 도착지 기준 월별 파일을 추가로 받습니다.
+
+```bash
+MONTHS=202603 bash data_archive/scripts/download_age_gender_destination_months.sh
+```
+
+여러 달을 받을 수도 있습니다.
+
+```bash
+START_MONTH=202501 END_MONTH=202603 bash data_archive/scripts/download_age_gender_destination_months.sh
 ```
 
 다운로드 전 대상 파일명만 확인하려면 `DRY_RUN=1`을 사용합니다.
