@@ -109,7 +109,12 @@ python3 seoul_mobility_analysis.py
 4. 불량 ZIP 파일 자동 감지·삭제
 5. 필수 GIS·좌표·법정동 파일 준비
 6. `seoul_mobility_analysis.py` 실행
-7. 7개 시각화 차트 생성
+7. 시각화 차트 생성 및 Drive 저장
+
+분석 결과와 시각화 파일은 `/content/` 로컬 세션이 아니라
+`/content/drive/MyDrive/seoul_mobility/output`에 바로 저장됩니다.
+Colab 런타임이 종료되어도 Drive의 `output/processed`, `output/reports`,
+`output/reports/viz` 폴더에 결과가 남습니다.
 
 아래 URL에서 직접 열 수 있습니다.
 
