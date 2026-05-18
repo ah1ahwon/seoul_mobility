@@ -557,18 +557,24 @@ def summarize_living_migration(
             continue
 
         print(f"   reading living migration: {input_path.name}")
-        for chunk in pd.read_csv(
-            input_path,
-            compression="zip",
-            usecols=usecols,
-            dtype={
-                "o_admdong_cd": "string",
-                "d_admdong_cd": "string",
-                "st_time_cd": "string",
-                "etl_ymd": "string",
-            },
-            chunksize=chunksize,
-        ):
+        try:
+            chunk_iter = pd.read_csv(
+                input_path,
+                compression="zip",
+                usecols=usecols,
+                dtype={
+                    "o_admdong_cd": "string",
+                    "d_admdong_cd": "string",
+                    "st_time_cd": "string",
+                    "etl_ymd": "string",
+                },
+                chunksize=chunksize,
+            )
+        except zipfile.BadZipFile:
+            print(f"   WARNING: skipping invalid ZIP during read: {input_path.name}")
+            continue
+
+        for chunk in chunk_iter:
             for col in ["move_dist", "move_time", "2030_cnt", "total_cnt"]:
                 chunk[col] = pd.to_numeric(chunk[col], errors="coerce").fillna(0.0)
 
@@ -719,18 +725,24 @@ def summarize_living_migration_monthly(
             continue
 
         print(f"   reading monthly snapshot: {input_path.name}")
-        for chunk in pd.read_csv(
-            input_path,
-            compression="zip",
-            usecols=usecols,
-            dtype={
-                "o_admdong_cd": "string",
-                "d_admdong_cd": "string",
-                "st_time_cd": "string",
-                "etl_ymd": "string",
-            },
-            chunksize=chunksize,
-        ):
+        try:
+            chunk_iter = pd.read_csv(
+                input_path,
+                compression="zip",
+                usecols=usecols,
+                dtype={
+                    "o_admdong_cd": "string",
+                    "d_admdong_cd": "string",
+                    "st_time_cd": "string",
+                    "etl_ymd": "string",
+                },
+                chunksize=chunksize,
+            )
+        except zipfile.BadZipFile:
+            print(f"   WARNING: skipping invalid ZIP during read: {input_path.name}")
+            continue
+
+        for chunk in chunk_iter:
             chunk["yyyymm"] = chunk["etl_ymd"].astype(str).str[:6]
 
             for col in ["move_dist", "move_time", "2030_cnt", "total_cnt"]:
