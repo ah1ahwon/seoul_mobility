@@ -7,6 +7,7 @@
 ```text
 .
 ├── seoul_mobility_analysis.py      # 분석 스크립트 (로컬/Colab 공통)
+├── seoul_mobility_visualize.py     # 시각화 스크립트 (로컬/Colab 공통)
 ├── Seoul_Mobility_Full_Pipeline.ipynb  # Colab 전체 파이프라인 (다운로드 → 분석 → 시각화)
 ├── Seoul_Mobility_Colab.ipynb      # Colab 단순 연결용 (Drive에 데이터 미리 준비 후 실행)
 ├── ANALYSIS_FLOW.md                # 분석 방법론 상세 문서
@@ -86,6 +87,7 @@ python3 -m pip install -r requirements.txt
 
 ```bash
 python3 seoul_mobility_analysis.py
+python3 seoul_mobility_visualize.py
 ```
 
 분석 시작 직후 필수 입력 파일 preflight를 수행합니다. 매출, 생활인구, GIS, 법정동 매핑, 역·정류장 좌표가 없으면 대용량 생활이동 파일을 읽기 전에 중단하고 누락 목록을 출력합니다.

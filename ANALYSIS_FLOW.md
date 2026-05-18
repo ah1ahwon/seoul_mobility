@@ -220,8 +220,8 @@ data_archive/raw/seoul_commercial_sales_latest.csv
 출처:
 
 ```text
-서울시 상권분석서비스 (영역-행정동별 추정매출)
-https://data.seoul.go.kr/dataList/OA-15568/S/1/datasetView.do
+서울시 상권분석서비스 (추정매출-행정동)
+https://data.seoul.go.kr/dataList/OA-22175/A/1/datasetView.do
 ```
 
 분석 내 역할:
@@ -240,6 +240,7 @@ https://data.seoul.go.kr/dataList/OA-15568/S/1/datasetView.do
 
 - 파일이 없으면 기본 실행에서는 분석을 중단한다.
 - 다운로드: `bash data_archive/scripts/download_commercial_sales.sh`
+- 원천: `OA-22175`, 현재 2024년 파일 `seq=6`
 
 ### 2.6 서울 생활인구 (내국인) 행정동별 시간대별
 
@@ -816,6 +817,6 @@ output/reports/candidate_explanation_report.md
 
 ### 운영상 확인 항목
 
-- 매출·생활인구 다운로드 스크립트의 `seq`는 서울 열린데이터광장 원천 페이지에서 최신 파일 기준으로 바뀔 수 있다.
+- 매출·생활인구 다운로드 스크립트의 `seq`는 서울 열린데이터광장 원천 페이지에서 최신 파일 기준으로 바뀔 수 있다. 매출 데이터는 `OA-22175`의 행정동별 추정매출 파일을 사용한다.
 - `seoul_admin_dong_boundary.zip`, `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`가 없으면 기본 실행에서는 분석을 중단한다.
 - 월별 전체 일별 집계를 완전히 만들려면 `download_living_migration_daily_range.sh`로 각 월의 모든 일별 생활이동 ZIP을 추가 확보하고, `coverage_ratio`가 1에 가까운지 확인해야 한다.
