@@ -1454,7 +1454,7 @@ def summarize_sales_by_dong(
 
 
 # ---------------------------------------------------------------------------
-# 유동인구 vs 상주인구 (서울 생활인구 OA-14939)
+# 유동인구 vs 상주인구 (서울 생활인구 OA-14991)
 # ---------------------------------------------------------------------------
 
 def summarize_population_ratio(
@@ -1466,8 +1466,8 @@ def summarize_population_ratio(
 
     필요 파일: LIVING_POPULATION_CSV
     다운로드: bash data_archive/scripts/download_living_population.sh
-    출처: 서울 열린데이터광장 OA-14939
-          https://data.seoul.go.kr/dataList/OA-14939/S/1/datasetView.do
+    출처: 서울 열린데이터광장 OA-14991
+          https://data.seoul.go.kr/dataList/OA-14991/A/1/datasetView.do
 
     daytime_influx_ratio = 낮 2030 평균 / 심야 2030 평균
     > 1이면 낮에 외부에서 유입되는 인구가 거주자보다 많음 (유동인구 강세)
@@ -1475,8 +1475,42 @@ def summarize_population_ratio(
     if not require_input(input_path, "생활인구 데이터", "bash data_archive/scripts/download_living_population.sh"):
         return pd.DataFrame()
 
+    def _population_chunks(path: Path):
+        if path.suffix.lower() == ".zip":
+            with ZipFile(path) as zf:
+                csv_names = [name for name in zf.namelist() if name.lower().endswith(".csv")]
+                if not csv_names:
+                    raise FileNotFoundError(f"생활인구 ZIP 내부 CSV 없음: {path}")
+                with zf.open(csv_names[0]) as fp:
+                    yield from pd.read_csv(
+                        fp,
+                        encoding="utf-8-sig",
+                        chunksize=500_000,
+                        low_memory=False,
+                        index_col=False,
+                    )
+        else:
+            yield from pd.read_csv(
+                path,
+                encoding="utf-8-sig",
+                chunksize=500_000,
+                low_memory=False,
+                index_col=False,
+            )
+
+    detailed_2030_cols = [
+        "남자20세부터24세생활인구수",
+        "남자25세부터29세생활인구수",
+        "남자30세부터34세생활인구수",
+        "남자35세부터39세생활인구수",
+        "여자20세부터24세생활인구수",
+        "여자25세부터29세생활인구수",
+        "여자30세부터34세생활인구수",
+        "여자35세부터39세생활인구수",
+    ]
+
     parts = []
-    for chunk in pd.read_csv(input_path, encoding="utf-8-sig", chunksize=500_000, low_memory=False):
+    for chunk in _population_chunks(input_path):
         col_map = {
             "행정동코드": "admdong_cd",
             "시간대구분": "time_slot",
@@ -1484,12 +1518,14 @@ def summarize_population_ratio(
             "30대생활인구수": "pop_30s",
         }
         chunk = chunk.rename(columns={k: v for k, v in col_map.items() if k in chunk.columns})
-        for col in ["pop_20s", "pop_30s"]:
+        for col in ["pop_20s", "pop_30s", *detailed_2030_cols]:
             if col in chunk.columns:
                 chunk[col] = pd.to_numeric(chunk[col], errors="coerce").fillna(0.0)
 
         if "pop_20s" in chunk.columns and "pop_30s" in chunk.columns:
             chunk["pop_2030"] = chunk["pop_20s"] + chunk["pop_30s"]
+        elif all(col in chunk.columns for col in detailed_2030_cols):
+            chunk["pop_2030"] = chunk[detailed_2030_cols].sum(axis=1)
         else:
             continue
 
