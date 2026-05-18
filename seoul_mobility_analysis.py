@@ -78,7 +78,7 @@ BJDONG_MAPPING_CSV = ARCHIVE_DIR / "metadata" / "bjdong_admdong_mapping.csv"
 LAND_USE_ZIP = RAW_DIR / "seoul_land_use_zone.zip"
 ADMIN_DONG_BOUNDARY_ZIP = RAW_DIR / "seoul_admin_dong_boundary.zip"
 
-# 서울시 우리마을가게 상권분석서비스 — 행정동별 추정매출 (download_commercial_sales.sh)
+# 서울시 상권분석서비스 — 행정동별 추정매출 (download_commercial_sales.sh)
 COMMERCIAL_SALES_CSV = RAW_DIR / "seoul_commercial_sales_latest.csv"
 
 # 서울 생활인구 — 행정동별 시간대별 추정 유동인구 (download_living_population.sh)
@@ -1369,8 +1369,8 @@ def summarize_sales_by_dong(
 
     필요 파일: COMMERCIAL_SALES_CSV
     다운로드: bash data_archive/scripts/download_commercial_sales.sh
-    출처: 서울 열린데이터광장 OA-15568
-          https://data.seoul.go.kr/dataList/OA-15568/S/1/datasetView.do
+    출처: 서울 열린데이터광장 OA-22175
+          https://data.seoul.go.kr/dataList/OA-22175/A/1/datasetView.do
 
     반환 컬럼: d_admdong_cd, total_sales, total_stores, sales_per_store,
               food_sales_ratio (음식/주점/카페 매출 비중)
@@ -1378,7 +1378,33 @@ def summarize_sales_by_dong(
     if not require_input(input_path, "매출 데이터", "bash data_archive/scripts/download_commercial_sales.sh"):
         return pd.DataFrame()
 
-    df = pd.read_csv(input_path, encoding="utf-8-sig", low_memory=False)
+    read_errors: list[str] = []
+    df = None
+    if input_path.suffix.lower() == ".zip":
+        with ZipFile(input_path) as zf:
+            csv_names = [name for name in zf.namelist() if name.lower().endswith(".csv")]
+            if not csv_names:
+                raise FileNotFoundError(f"매출 ZIP 내부 CSV 없음: {input_path}")
+            with zf.open(csv_names[0]) as fp:
+                for enc in ["utf-8-sig", "cp949", "euc-kr"]:
+                    try:
+                        df = pd.read_csv(fp, encoding=enc, low_memory=False)
+                        break
+                    except UnicodeDecodeError as exc:
+                        read_errors.append(f"{enc}: {exc}")
+                        fp.seek(0)
+    else:
+        for enc in ["utf-8-sig", "cp949", "euc-kr"]:
+            try:
+                df = pd.read_csv(input_path, encoding=enc, low_memory=False)
+                break
+            except UnicodeDecodeError as exc:
+                read_errors.append(f"{enc}: {exc}")
+    if df is None:
+        raise UnicodeDecodeError(
+            "unknown", b"", 0, 1, "매출 CSV 인코딩 판별 실패: " + " / ".join(read_errors)
+        )
+
     col_map = {
         "행정동_코드": "admdong_cd",
         "행정동_코드_명": "admdong_name",
@@ -1391,6 +1417,14 @@ def summarize_sales_by_dong(
     for col in ["monthly_sales", "monthly_txn", "store_count"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+    if "store_count" not in df.columns:
+        df["store_count"] = 0.0
+    if "monthly_txn" not in df.columns:
+        df["monthly_txn"] = 0.0
+    required_cols = ["admdong_cd", "monthly_sales"]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise KeyError(f"매출 데이터 필수 컬럼 없음: {missing_cols}")
 
     summary = df.groupby("admdong_cd", as_index=False).agg(
         total_sales=("monthly_sales", "sum"),
