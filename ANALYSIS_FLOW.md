@@ -254,7 +254,7 @@ data_archive/raw/seoul_living_population_latest.csv
 
 ```text
 서울 생활인구 (내국인)
-https://data.seoul.go.kr/dataList/OA-14939/S/1/datasetView.do
+https://data.seoul.go.kr/dataList/OA-14991/A/1/datasetView.do
 ```
 
 분석 내 역할:
@@ -264,7 +264,8 @@ https://data.seoul.go.kr/dataList/OA-14939/S/1/datasetView.do
 
 비고:
 
-- 월 1~2 GB 규모의 대용량 파일이다.
+- 현재 사용하는 원천은 `OA-14991` 행정동 단위 파일이며, 2026년 4월 파일은 `seq=2604`이다.
+- 월 40~50 MB 규모의 압축 파일이다.
 - 파일이 없으면 기본 실행에서는 분석을 중단한다.
 - 다운로드: `bash data_archive/scripts/download_living_population.sh`
 
@@ -817,6 +818,6 @@ output/reports/candidate_explanation_report.md
 
 ### 운영상 확인 항목
 
-- 매출·생활인구 다운로드 스크립트의 `seq`는 서울 열린데이터광장 원천 페이지에서 최신 파일 기준으로 바뀔 수 있다. 매출 데이터는 `OA-22175`의 행정동별 추정매출 파일을 사용한다.
+- 매출·생활인구 다운로드 스크립트의 `seq`는 서울 열린데이터광장 원천 페이지에서 최신 파일 기준으로 바뀔 수 있다. 매출 데이터는 `OA-22175`의 행정동별 추정매출 파일, 생활인구는 `OA-14991`의 행정동 단위 서울 생활인구 파일을 사용한다.
 - `seoul_admin_dong_boundary.zip`, `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`가 없으면 기본 실행에서는 분석을 중단한다.
 - 월별 전체 일별 집계를 완전히 만들려면 `download_living_migration_daily_range.sh`로 각 월의 모든 일별 생활이동 ZIP을 추가 확보하고, `coverage_ratio`가 1에 가까운지 확인해야 한다.
