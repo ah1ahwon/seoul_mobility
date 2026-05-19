@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/seoul_mobility_matplotlib")
@@ -111,7 +112,29 @@ def save(fig, path: Path, show: bool) -> None:
     print(f"[ok] {path.name}")
 
 
-def chart_1(monthly: pd.DataFrame, latest_month: str | None, months: list[str], viz_dir: Path, show: bool) -> bool:
+def next_run_dir(viz_root: Path) -> tuple[Path, str]:
+    """Create a new sequential visualization run directory without overwriting old PNGs."""
+    viz_root.mkdir(parents=True, exist_ok=True)
+    run_numbers: list[int] = []
+    for path in viz_root.iterdir():
+        if not path.is_dir():
+            continue
+        match = re.fullmatch(r"run_(\d{3,})", path.name)
+        if match:
+            run_numbers.append(int(match.group(1)))
+    run_no = max(run_numbers, default=0) + 1
+    run_id = f"run_{run_no:03d}"
+    run_dir = viz_root / run_id
+    run_dir.mkdir(parents=False, exist_ok=False)
+    return run_dir, run_id
+
+
+def chart_path(viz_dir: Path, run_id: str, filename: str) -> Path:
+    """Return a run-scoped chart path with the run id in the filename."""
+    return viz_dir / f"{run_id}__{filename}"
+
+
+def chart_1(monthly: pd.DataFrame, latest_month: str | None, months: list[str], viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 1"
     required = ["yyyymm", "d_admdong_cd", "residential_filter", "adjusted_mobility_score"]
     if monthly.empty or latest_month is None or not ensure_columns(monthly, required, title):
@@ -156,11 +179,11 @@ def chart_1(monthly: pd.DataFrame, latest_month: str | None, months: list[str], 
     ax.tick_params(axis="x", rotation=45)
     ax.grid(axis="y", alpha=0.3)
     plt.tight_layout()
-    save(fig, viz_dir / "01_top15_monthly_score_trend.png", show)
+    save(fig, chart_path(viz_dir, run_id, "01_top15_monthly_score_trend.png"), show)
     return True
 
 
-def chart_2(monthly: pd.DataFrame, trend: pd.DataFrame, months: list[str], viz_dir: Path, show: bool) -> bool:
+def chart_2(monthly: pd.DataFrame, trend: pd.DataFrame, months: list[str], viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 2"
     if monthly.empty or trend.empty:
         print("[skip] chart 2 data empty")
@@ -204,11 +227,11 @@ def chart_2(monthly: pd.DataFrame, trend: pd.DataFrame, months: list[str], viz_d
     ax.set_xticklabels(heat_df.columns, rotation=90, fontsize=8)
     ax.set_title("방문성 후보 Top 30 행정동 x 월별 Score 히트맵", fontsize=14, pad=12)
     plt.tight_layout()
-    save(fig, viz_dir / "02_heatmap_dong_month.png", show)
+    save(fig, chart_path(viz_dir, run_id, "02_heatmap_dong_month.png"), show)
     return True
 
 
-def chart_3(trend: pd.DataFrame, viz_dir: Path, show: bool) -> bool:
+def chart_3(trend: pd.DataFrame, viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 3"
     if trend.empty or not ensure_columns(trend, ["score_slope", "residential_filter"], title):
         return False
@@ -232,11 +255,11 @@ def chart_3(trend: pd.DataFrame, viz_dir: Path, show: bool) -> bool:
     ax.set_title("방문성 후보 행정동 Score 추세 - 상승 Top15 / 하락 Top15", fontsize=13, pad=10)
     ax.grid(axis="x", alpha=0.3)
     plt.tight_layout()
-    save(fig, viz_dir / "03_score_slope_ranking.png", show)
+    save(fig, chart_path(viz_dir, run_id, "03_score_slope_ranking.png"), show)
     return True
 
 
-def chart_4(monthly: pd.DataFrame, latest_month: str | None, viz_dir: Path, show: bool) -> bool:
+def chart_4(monthly: pd.DataFrame, latest_month: str | None, viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 4"
     required = ["yyyymm", "residential_filter", "adjusted_mobility_score"]
     if monthly.empty or latest_month is None or not ensure_columns(monthly, required, title):
@@ -267,11 +290,11 @@ def chart_4(monthly: pd.DataFrame, latest_month: str | None, viz_dir: Path, show
     ax.legend(handles=[Patch(facecolor=v, label=k) for k, v in filter_colors.items()], loc="lower right", fontsize=9)
     ax.grid(axis="x", alpha=0.3)
     plt.tight_layout()
-    save(fig, viz_dir / "04_latest_month_top20.png", show)
+    save(fig, chart_path(viz_dir, run_id, "04_latest_month_top20.png"), show)
     return True
 
 
-def chart_5(monthly: pd.DataFrame, latest_month: str | None, viz_dir: Path, show: bool) -> bool:
+def chart_5(monthly: pd.DataFrame, latest_month: str | None, viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 5"
     required = ["yyyymm", "candidate_type", "residential_filter"]
     if monthly.empty or latest_month is None or not ensure_columns(monthly, required, title):
@@ -296,11 +319,11 @@ def chart_5(monthly: pd.DataFrame, latest_month: str | None, viz_dir: Path, show
     axes[1].tick_params(axis="x", rotation=30)
     axes[1].legend(fontsize=8)
     plt.tight_layout()
-    save(fig, viz_dir / "05_candidate_type_distribution.png", show)
+    save(fig, chart_path(viz_dir, run_id, "05_candidate_type_distribution.png"), show)
     return True
 
 
-def chart_6(monthly: pd.DataFrame, months: list[str], viz_dir: Path, show: bool) -> bool:
+def chart_6(monthly: pd.DataFrame, months: list[str], viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 6"
     if monthly.empty or not ensure_columns(monthly, ["yyyymm", "cnt_2030"], title):
         return False
@@ -333,11 +356,11 @@ def chart_6(monthly: pd.DataFrame, months: list[str], viz_dir: Path, show: bool)
     ax.legend(fontsize=9)
     ax.grid(axis="y", alpha=0.3)
     plt.tight_layout()
-    save(fig, viz_dir / "06_total_2030_monthly_trend.png", show)
+    save(fig, chart_path(viz_dir, run_id, "06_total_2030_monthly_trend.png"), show)
     return True
 
 
-def chart_7(monthly: pd.DataFrame, latest_month: str | None, months: list[str], viz_dir: Path, show: bool) -> bool:
+def chart_7(monthly: pd.DataFrame, latest_month: str | None, months: list[str], viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 7"
     required = ["yyyymm", "d_admdong_cd", "residential_filter", "adjusted_mobility_score"]
     if monthly.empty or latest_month is None or not ensure_columns(monthly, required, title):
@@ -379,11 +402,11 @@ def chart_7(monthly: pd.DataFrame, latest_month: str | None, months: list[str], 
     ax.tick_params(axis="x", rotation=45)
     ax.grid(alpha=0.3)
     plt.tight_layout()
-    save(fig, viz_dir / "07_bump_chart_visitor_rank.png", show)
+    save(fig, chart_path(viz_dir, run_id, "07_bump_chart_visitor_rank.png"), show)
     return True
 
 
-def chart_8(dest: pd.DataFrame, viz_dir: Path, show: bool) -> bool:
+def chart_8(dest: pd.DataFrame, viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 8"
     if dest.empty or not ensure_columns(dest, ["visit_pattern_type"], title):
         return False
@@ -399,11 +422,11 @@ def chart_8(dest: pd.DataFrame, viz_dir: Path, show: bool) -> bool:
     ax.set_title("방문 패턴 유형 분포 (visit_pattern_type)", fontsize=13, fontweight="bold")
     ax.invert_yaxis()
     plt.tight_layout()
-    save(fig, viz_dir / "08_visit_pattern_type.png", show)
+    save(fig, chart_path(viz_dir, run_id, "08_visit_pattern_type.png"), show)
     return True
 
 
-def chart_9(dest: pd.DataFrame, viz_dir: Path, show: bool) -> bool:
+def chart_9(dest: pd.DataFrame, viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 9"
     if dest.empty or not ensure_columns(dest, ["adjusted_mobility_score"], title):
         return False
@@ -433,11 +456,11 @@ def chart_9(dest: pd.DataFrame, viz_dir: Path, show: bool) -> bool:
     ax.set_ylabel(score_y)
     ax.set_title("이동 기반 점수 vs 상권 잠재력 복합 점수", fontsize=13, fontweight="bold")
     plt.tight_layout()
-    save(fig, viz_dir / "09_commercial_potential_scatter.png", show)
+    save(fig, chart_path(viz_dir, run_id, "09_commercial_potential_scatter.png"), show)
     return True
 
 
-def chart_10(bjdong: pd.DataFrame, viz_dir: Path, show: bool) -> bool:
+def chart_10(bjdong: pd.DataFrame, viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 10"
     if bjdong.empty:
         print("[skip] chart 10 bjdong data empty")
@@ -463,17 +486,19 @@ def chart_10(bjdong: pd.DataFrame, viz_dir: Path, show: bool) -> bool:
     ax.invert_yaxis()
     ax.legend(handles=[Patch(facecolor=c, label=l) for l, c in vpt_color.items()], loc="lower right", fontsize=8)
     plt.tight_layout()
-    save(fig, viz_dir / "10_bjdong_top20.png", show)
+    save(fig, chart_path(viz_dir, run_id, "10_bjdong_top20.png"), show)
     return True
 
 
 def generate_visualizations(output_dir: Path, show: bool = False) -> list[Path]:
     setup_korean_font()
     processed = output_dir / "processed"
-    viz_dir = output_dir / "reports" / "viz"
-    viz_dir.mkdir(parents=True, exist_ok=True)
+    viz_root = output_dir / "reports" / "viz"
+    viz_dir, run_id = next_run_dir(viz_root)
 
     print(f"Output directory: {output_dir}")
+    print(f"Visualization run: {run_id}")
+    print(f"Visualization directory: {viz_dir}")
     if not processed.exists():
         raise FileNotFoundError(f"processed directory not found: {processed}")
 
@@ -493,16 +518,16 @@ def generate_visualizations(output_dir: Path, show: bool = False) -> list[Path]:
         print("[skip] monthly summary is empty or has no yyyymm")
 
     chart_funcs = [
-        lambda: chart_1(monthly, latest_month, months, viz_dir, show),
-        lambda: chart_2(monthly, trend, months, viz_dir, show),
-        lambda: chart_3(trend, viz_dir, show),
-        lambda: chart_4(monthly, latest_month, viz_dir, show),
-        lambda: chart_5(monthly, latest_month, viz_dir, show),
-        lambda: chart_6(monthly, months, viz_dir, show),
-        lambda: chart_7(monthly, latest_month, months, viz_dir, show),
-        lambda: chart_8(dest, viz_dir, show),
-        lambda: chart_9(dest, viz_dir, show),
-        lambda: chart_10(bjdong, viz_dir, show),
+        lambda: chart_1(monthly, latest_month, months, viz_dir, run_id, show),
+        lambda: chart_2(monthly, trend, months, viz_dir, run_id, show),
+        lambda: chart_3(trend, viz_dir, run_id, show),
+        lambda: chart_4(monthly, latest_month, viz_dir, run_id, show),
+        lambda: chart_5(monthly, latest_month, viz_dir, run_id, show),
+        lambda: chart_6(monthly, months, viz_dir, run_id, show),
+        lambda: chart_7(monthly, latest_month, months, viz_dir, run_id, show),
+        lambda: chart_8(dest, viz_dir, run_id, show),
+        lambda: chart_9(dest, viz_dir, run_id, show),
+        lambda: chart_10(bjdong, viz_dir, run_id, show),
     ]
 
     made = 0
