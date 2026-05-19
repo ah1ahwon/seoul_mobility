@@ -11,6 +11,8 @@
 ├── Seoul_Mobility_Full_Pipeline.ipynb  # Colab 전체 파이프라인 (다운로드 → 분석 → 시각화)
 ├── Seoul_Mobility_Colab.ipynb      # Colab 단순 연결용 (Drive에 데이터 미리 준비 후 실행)
 ├── ANALYSIS_FLOW.md                # 분석 방법론 상세 문서
+├── ANALYSIS_RESULT_SUMMARY.md      # 공유/발표용 분석 결과 요약
+├── DATA_USAGE.md                   # 원천 데이터별 사용 컬럼·생성 지표 기준표
 ├── data_archive/
 │   ├── raw/                        # 원천 파일 (gitignore 대상, 로컬/Drive 보관)
 │   ├── metadata/                   # manifest CSV, 데이터셋 페이지 HTML
@@ -75,6 +77,8 @@
 ## Data Sources
 
 분석 재현성을 위해 다운로드 원천이 확인된 데이터만 기본 입력으로 사용합니다.
+각 원천 데이터의 어떤 컬럼을 어떤 지표로 쓰는지는 [`DATA_USAGE.md`](DATA_USAGE.md)에 정리했습니다.
+분석 결과를 공유용 보고서 형태로 보려면 [`ANALYSIS_RESULT_SUMMARY.md`](ANALYSIS_RESULT_SUMMARY.md)를 확인하세요.
 
 | 데이터 | 로컬 파일 | 출처 |
 |---|---|---|
