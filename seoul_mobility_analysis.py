@@ -2554,7 +2554,7 @@ def run_all() -> None:
     explanations.to_csv(explanations_path, index=False, encoding="utf-8-sig")
     write_candidate_explanation_report(explanations)
 
-    # 법정동 Top 20 보고서
+    # 법정동 Top 20 / Bottom 5 보고서
     bjdong_report_cols = [
         c for c in [
             "bjdong_nm", "d_gu_name", "visit_pattern_type", "residential_filter", "candidate_type",
@@ -2565,11 +2565,16 @@ def run_all() -> None:
         if c in bjdong_summary.columns
     ]
     bjdong_report = (
-        "# 법정동(洞) 단위 상권 잠재력 Top 20\n\n"
+        "# 법정동(洞) 단위 상권 잠재력 Top 20 / Bottom 5\n\n"
         "행정동 단위 분석 결과를 법정동 단위로 집계하고, "
         "용도지역·매출·유동인구·방문패턴을 결합한 `commercial_potential_score` 기준 순위입니다. "
         "GIS·매출·생활인구 데이터를 모두 결합한 `commercial_potential_score` 기준 순위입니다.\n\n"
+        "## 상위 20\n\n"
         f"{dataframe_to_markdown(bjdong_summary.head(20)[bjdong_report_cols])}\n"
+        "\n## 하위 5\n\n"
+        "같은 법정동 집계 안에서 복합 점수가 낮은 비교군입니다. 적극 후보라기보다 "
+        "우선순위 조정과 제외 판단에 참고합니다.\n\n"
+        f"{dataframe_to_markdown(bjdong_summary.tail(5).sort_values('commercial_potential_score' if 'commercial_potential_score' in bjdong_summary.columns else 'adjusted_mobility_score')[bjdong_report_cols])}\n"
     )
     (REPORTS_DIR / "bjdong_commercial_candidate_top20.md").write_text(bjdong_report, encoding="utf-8")
 
