@@ -186,6 +186,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `monthly_visitor_candidate_latest_top20.md` | 최신 월 방문 상권 후보 상위 20 + 하위 5 |
 | `monthly_candidate_trend_top20.md` | 장기 월별 강세 후보 Top 20 |
 | `age_group_destination_top20.md` | 연령대별 도착지 Top 20 |
+| `bjdong_commercial_candidate_top20.md` | 법정동 단위 상권 잠재력 상위 20 + 하위 5 |
 | `candidate_explanation_report.md` | 후보 지역별 상위/하위 자동 설명 리포트 |
 | `interpretation_report.md` | 전체 결과 해석 보고서 |
 

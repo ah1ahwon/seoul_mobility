@@ -735,14 +735,14 @@ output/reports/monthly_candidate_trend_top20.md
 
 `trend_type`은 `상승` / `하락` / `유지/변동` 세 값이며, `score_slope > 0.03`이고 `score_change_6m > 0`이면 상승으로 분류한다. 현재 대부분의 후보가 `유지/변동`에 해당한다.
 
-#### 법정동 상권 잠재력 Top 20
+#### 법정동 상권 잠재력 Top 20 / Bottom 5
 
 ```text
 output/processed/bjdong_candidate_summary.csv
 output/reports/bjdong_commercial_candidate_top20.md
 ```
 
-행정동 결과를 법정동 단위로 재집계한 결과다. `commercial_potential_score` 기준으로 정렬되며, GIS/매출/생활인구 데이터가 모두 있어야 `commercial_potential_score`를 최종 기준으로 해석한다.
+행정동 결과를 법정동 단위로 재집계한 결과다. `commercial_potential_score` 기준으로 정렬되며, 상위 20개와 같은 기준의 하위 5개 비교군을 함께 출력한다. GIS/매출/생활인구 데이터가 모두 있어야 `commercial_potential_score`를 최종 기준으로 해석한다.
 
 #### 방문 패턴 분류 현황
 
