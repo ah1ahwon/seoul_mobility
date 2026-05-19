@@ -12,7 +12,7 @@ data_archive/metadata/seoul_cookie.txt
 # Generated analysis outputs
 # These are reproducible by running:
 #   python3 seoul_mobility_analysis.py
-output/
+output/processed/bus_stop_route_hourly.csv
 
 # Local raw data files
 # Keep these locally, but do not push them to GitHub.
