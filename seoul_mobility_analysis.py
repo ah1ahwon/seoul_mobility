@@ -84,7 +84,7 @@ COMMERCIAL_SALES_CSV = RAW_DIR / "seoul_commercial_sales_latest.csv"
 # 서울 생활인구 — 행정동별 시간대별 추정 유동인구 (download_living_population.sh)
 LIVING_POPULATION_CSV = RAW_DIR / "seoul_living_population_latest.csv"
 
-# 필수 좌표 파일: 행정동 경계와 공간 결합해 교통 접근성 지표 생성
+# 선택 좌표 파일: 출처가 확인된 경우에만 행정동 경계와 공간 결합해 교통 접근성 지표 생성
 SUBWAY_STATION_COORD_CSV = RAW_DIR / "subway_station_coordinates.csv"
 BUS_STOP_COORD_CSV = RAW_DIR / "bus_stop_coordinates.csv"
 
@@ -173,8 +173,6 @@ def validate_required_inputs() -> None:
         (LIVING_POPULATION_CSV, "생활인구 데이터", "bash data_archive/scripts/download_living_population.sh"),
         (LAND_USE_ZIP, "용도지역", "bash data_archive/scripts/download_gis_data.sh"),
         (ADMIN_DONG_BOUNDARY_ZIP, "행정동 경계", "bash data_archive/scripts/download_gis_data.sh"),
-        (SUBWAY_STATION_COORD_CSV, "지하철역 좌표", "raw/subway_station_coordinates.csv 준비"),
-        (BUS_STOP_COORD_CSV, "버스정류장 좌표", "raw/bus_stop_coordinates.csv 준비"),
         (BJDONG_MAPPING_CSV, "행정동-법정동 매핑", "bash data_archive/scripts/download_bjdong_mapping.sh"),
     ]
     missing_messages = []
@@ -1982,7 +1980,7 @@ def summarize_transport_access_by_dong(
     bus_coord_path: Path = BUS_STOP_COORD_CSV,
 ) -> pd.DataFrame:
     """
-    Spatially join required station/stop coordinate files to admin-dong boundaries.
+    Spatially join optional station/stop coordinate files to admin-dong boundaries.
 
     Expected files:
       - subway_station_coordinates.csv: station_name, longitude/latitude or x/y
@@ -1990,9 +1988,8 @@ def summarize_transport_access_by_dong(
     """
     if not require_input(admin_dong_path, "행정동 경계", "bash data_archive/scripts/download_gis_data.sh"):
         return pd.DataFrame()
-    if not require_input(subway_coord_path, "지하철역 좌표", "raw/subway_station_coordinates.csv 준비"):
-        return pd.DataFrame()
-    if not require_input(bus_coord_path, "버스정류장 좌표", "raw/bus_stop_coordinates.csv 준비"):
+    if not subway_coord_path.exists() and not bus_coord_path.exists():
+        print("   역·정류장 좌표 파일 없음 — 출처 미기재 파일은 필수로 요구하지 않고 교통 접근성 공간 결합을 건너뜀")
         return pd.DataFrame()
     try:
         import geopandas as gpd
@@ -2436,12 +2433,12 @@ def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame
         "기본 지하철·버스 데이터에는 역명·정류장명만 있고 좌표가 없습니다. "
         "`seoul_admin_dong_boundary.zip`과 좌표 파일(`subway_station_coordinates.csv`, "
         "`bus_stop_coordinates.csv`)이 있으면 공간 조인으로 `transport_access_by_dong.csv`를 생성합니다. "
-        "기본 실행에서는 이 파일들이 필수이며, 누락 시 분석을 중단합니다.\n\n"
-        "**3. 소비/점포 데이터 미결합**\n\n"
-        "현재 분석은 이동량 신호만 사용합니다. "
-        "실제 상권성 확인을 위해서는 카드 매출 집계, 업종별 점포 수 등의 결합이 필요합니다. "
-        "서울 열린데이터광장의 상권분석서비스 데이터를 행정동 코드 기준으로 조인하면 "
-        "이동 신호와 실제 소비 간의 갭을 확인할 수 있습니다.\n\n"
+        "좌표 파일은 다운로드 원천이 문서화되지 않아 기본 필수 입력에서 제외했고, "
+        "출처가 확인된 파일을 별도로 준비한 경우에만 보조 산출물을 생성합니다.\n\n"
+        "**3. 매출 결합 이후 추가 검증 필요**\n\n"
+        "현재 분석은 행정동별 추정매출을 결합해 `commercial_potential_score`를 계산합니다. "
+        "다만 업종별 점포 수, 신규/폐업, 임대료, 카드 매출의 세부 업종 같은 데이터는 아직 결합하지 않았습니다. "
+        "최종 입지 판단에서는 이동 신호와 추정매출 사이의 갭, 점포 밀도, 업종 적합성을 추가로 확인해야 합니다.\n\n"
         "**4. 거주성 보정 설계 의도**\n\n"
         "`adjusted_mobility_score = mobility_score - 0.7 × residential_dominance_score`는 "
         "거주성 높은 지역을 완전히 제거하지 않고 **감점·분리**하는 장치입니다. "

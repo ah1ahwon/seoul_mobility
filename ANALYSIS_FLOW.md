@@ -365,17 +365,17 @@ https://data.seoul.go.kr/dataList/OA-12913/S/1/datasetView.do
 
 ### Step 0. 필수 입력 파일 preflight
 
-분석 시작 직후 필수 입력 파일을 먼저 확인한다. 매출, 생활인구, GIS, 법정동 매핑, 역·정류장 좌표가 없으면 대용량 생활이동 ZIP을 읽기 전에 중단하고 누락 목록과 준비 스크립트를 출력한다. 개발용 부분 실행이 필요할 때만 `SEOUL_ALLOW_PARTIAL=1`을 사용한다.
+분석 시작 직후 필수 입력 파일을 먼저 확인한다. 매출, 생활인구, GIS, 법정동 매핑이 없으면 대용량 생활이동 ZIP을 읽기 전에 중단하고 누락 목록과 준비 스크립트를 출력한다. 개발용 부분 실행이 필요할 때만 `SEOUL_ALLOW_PARTIAL=1`을 사용한다.
 
-Colab 전체 파이프라인에서는 Step 4-6에서 GIS/좌표/법정동 파일을 준비한다. 직접 다운로드 URL이 있으면 `REQUIRED_FILE_URLS`에 넣고, 없으면 Colab 업로드 창으로 다음 파일명을 맞춰 올린다.
+Colab 전체 파이프라인에서는 Step 4-6에서 GIS/법정동 파일을 준비한다. 직접 다운로드 URL이 있으면 `REQUIRED_FILE_URLS`에 넣고, 없으면 Colab 업로드 창으로 다음 파일명을 맞춰 올린다.
 
 ```text
 seoul_land_use_zone.zip
 seoul_admin_dong_boundary.zip
-subway_station_coordinates.csv
-bus_stop_coordinates.csv
 bjdong_admdong_mapping.csv
 ```
+
+`subway_station_coordinates.csv`, `bus_stop_coordinates.csv`는 다운로드 원천이 문서화되지 않아 기본 필수 입력에서 제외했다. 출처가 확인된 좌표 파일을 별도로 준비한 경우에만 `transport_access_by_dong.csv` 보조 산출물을 생성한다.
 
 ### Step 1. 원천 데이터 아카이빙
 
@@ -765,6 +765,28 @@ output/reports/candidate_explanation_report.md
 
 방문성 후보와 혼재형 후보 중 상위 후보와 하위 5개 비교군을 대상으로 이동 신호, 시간대·요일 패턴, 거주성 주의점을 짧은 문장으로 자동 생성한다. 하위 5개는 적극 후보가 아니라 우선순위 조정과 제외 판단에 참고하는 비교군이다.
 
+#### 시각화 산출물
+
+```text
+output/reports/viz/
+output/reports/viz/run_###/
+```
+
+`seoul_mobility_visualize.py`는 실행마다 `run_###` 폴더를 새로 만들고 PNG 파일과 `README.md` 설명 파일을 함께 저장한다.
+
+| 파일 | 시각화 자료 | 목적/해석 포인트 |
+|---|---|---|
+| `01_top15_monthly_score_trend.png` | 방문성 후보 Top 15 월별 보정 점수 추세 | 최신 월 상위 15개 후보의 `adjusted_mobility_score` 추이를 비교해 장기 강세와 일시 급등을 구분한다. |
+| `02_heatmap_dong_month.png` | 방문성 후보 Top 30 행정동-월 히트맵 | 후보별 월간 강약, 계절성, 특정 월 이상치를 색으로 비교한다. |
+| `03_score_slope_ranking.png` | 상승/하락 기울기 Top 15 비교 | `score_slope` 기준으로 새로 강해지는 후보와 약해지는 후보를 분리한다. |
+| `04_latest_month_top20.png` | 최신 월 방문성 후보 Top 20 | 최신 월 기준 우선 검토할 행정동 후보 순위를 확인한다. |
+| `05_candidate_type_distribution.png` | 후보 유형과 거주성 필터 분포 | `candidate_type`이 방문성 후보인지 거주성 후보인지 유형별로 확인한다. |
+| `06_total_2030_monthly_trend.png` | 서울 전체 2030 유입량 월별 추이 | 개별 후보 점수 변화가 전체 2030 이동량 변화의 영향을 받은 것인지 판단한다. |
+| `07_bump_chart_visitor_rank.png` | 방문성 후보 Top 10 월별 순위 변화 | 후보 간 상대 순위의 안정성과 급등락을 본다. |
+| `08_visit_pattern_type.png` | 방문 패턴 유형 분포 | 목적 방문형, 복합형, 생활 밀착형, 불명확 유형의 행정동 수를 요약한다. |
+| `09_commercial_potential_scatter.png` | 이동 보정 점수와 상권 잠재력 점수 산점도 | 이동 신호와 매출·용도지역·유동인구 보정 후 점수 사이의 차이를 확인한다. |
+| `10_bjdong_top20.png` | 법정동 상권 잠재력 Top 20 | 행정동 결과를 법정동 단위로 바꿔 실제 입지 검토에 가까운 후보 순위를 비교한다. |
+
 ## 4. 최종 해석 기준
 
 현재 분석에서는 다음 순서로 결과를 본다.
@@ -786,7 +808,7 @@ output/reports/candidate_explanation_report.md
 
 - 생활이동 데이터는 2026년 3월 30개 일자 샘플이다. 3월 28일 파일은 원천 목록에 없어 제외되었다.
 - 월별 추세 분석은 2023년 1월~2026년 3월 월말 대표일 39개 파일을 사용한다. 전체 일별 월간 합계가 아니므로 특정 월말 이벤트나 요일 효과가 섞일 수 있다. 보유한 모든 일별 ZIP을 월별로 묶는 확장 산출물도 함께 생성하며, 날짜 범위 다운로드 스크립트로 각 월의 커버리지를 높일 수 있다.
-- 지하철/버스 행정동 공간 결합에는 행정동 경계와 역·정류장 좌표 파일이 필요하다. 기본 실행에서는 누락 시 분석을 중단한다.
+- 지하철/버스 행정동 공간 결합에는 행정동 경계와 역·정류장 좌표 파일이 필요하다. 좌표 파일은 출처가 문서화되지 않아 선택 입력으로만 사용한다.
 - `commercial_potential_score`는 GIS/매출/생활인구 필수 레이어를 모두 결합한 최종 후보 점수다.
 - 2030 자취/거주성 보정은 완전 제거가 아니라 감점/분리 장치다.
 - `혼재형 (상권+거주)` 카테고리는 방문 신호와 거주성 신호가 함께 강한 구간이므로, 순수 방문 상권으로 바로 해석하지 않는다.
@@ -813,11 +835,11 @@ output/reports/candidate_explanation_report.md
   - 파일이 없거나 패키지가 없으면 기본 실행에서는 중단하고, `SEOUL_ALLOW_PARTIAL=1`일 때만 개발용 부분 실행 허용
 - [x] 보유한 모든 생활이동 일별 ZIP을 월별로 묶는 확장 산출물 생성 (`monthly_living_migration_all_available_summary.csv`)
 - [x] 날짜 범위별 생활이동 일별 ZIP 다운로드 스크립트 추가 (`download_living_migration_daily_range.sh`)
-- [x] 역·정류장 좌표와 행정동 경계의 필수 공간 결합 구조 구현 (`transport_access_by_dong.csv`)
+- [x] 역·정류장 좌표와 행정동 경계의 선택 공간 결합 구조 구현 (`transport_access_by_dong.csv`)
 - [x] 후보 지역별 자동 설명 리포트 생성 (`candidate_explanation_report.md`)
 
 ### 운영상 확인 항목
 
 - 매출·생활인구 다운로드 스크립트의 `seq`는 서울 열린데이터광장 원천 페이지에서 최신 파일 기준으로 바뀔 수 있다. 매출 데이터는 `OA-22175`의 행정동별 추정매출 파일, 생활인구는 `OA-14991`의 행정동 단위 서울 생활인구 파일을 사용한다.
-- `seoul_admin_dong_boundary.zip`, `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`가 없으면 기본 실행에서는 분석을 중단한다.
+- `seoul_admin_dong_boundary.zip`는 기본 실행의 필수 GIS 레이어다. `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`는 출처 확인 후 선택적으로 추가한다.
 - 월별 전체 일별 집계를 완전히 만들려면 `download_living_migration_daily_range.sh`로 각 월의 모든 일별 생활이동 ZIP을 추가 확보하고, `coverage_ratio`가 1에 가까운지 확인해야 한다.

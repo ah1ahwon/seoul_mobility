@@ -33,3 +33,5 @@ The strongest mobility-only signal is not total volume. Use:
 - Living-migration data is estimated from mobile data and may mask counts of 3 or fewer.
 - Administrative-dong units need mapping to commercial-area codes before final scoring.
 - Station and stop catchment areas should be spatially joined rather than matched by name.
+- Station/stop coordinate CSV files are optional until their download source is documented; the main analysis should not depend on undocumented coordinate files.
+- Current final scoring already combines mobility with residential adjustment, land use, estimated sales, daytime influx, and visit-pattern bonus. Additional store-count, rent, and detailed card-sales layers are still validation inputs, not current required sources.

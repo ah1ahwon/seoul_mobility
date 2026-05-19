@@ -67,12 +67,32 @@
   - 행정동별 시간대별 생활인구, 낮/심야 2030 유입 비율 계산용
 - `seoul_land_use_zone.zip`, `seoul_admin_dong_boundary.zip`
   - 용도지역·행정동 경계 공간 결합 필수 레이어
-- `subway_station_coordinates.csv`, `bus_stop_coordinates.csv`
-  - 역·정류장 좌표와 행정동 경계 공간 결합용
 - `data_archive/metadata/bjdong_admdong_mapping.csv`
   - 행정동-법정동 공식 매핑 파일
 
 위 필수 레이어가 없으면 기본 실행은 중단됩니다. 개발용 부분 실행이 필요할 때만 `SEOUL_ALLOW_PARTIAL=1`을 사용하세요.
+
+## Data Sources
+
+분석 재현성을 위해 다운로드 원천이 확인된 데이터만 기본 입력으로 사용합니다.
+
+| 데이터 | 로컬 파일 | 출처 |
+|---|---|---|
+| 수도권 생활이동 OD, 연령별 출발-도착지 목적별 | `seoul_purpose_admdong4_in_202603*.zip`, `seoul_purpose_admdong4_in_YYYYMMDD.zip` | 서울 열린데이터광장 `OA-22299` https://data.seoul.go.kr/dataList/OA-22299/F/1/datasetView.do |
+| 수도권 생활이동, 성·연령별 도착지 기준 | `seoul_purpose_admdong1_in_YYYYMM.zip` | 서울 열린데이터광장 `OA-22298` https://data.seoul.go.kr/dataList/OA-22298/F/1/datasetView.do |
+| 지하철 역별 승하차 인원 | `CARD_SUBWAY_MONTH_202604.csv` | 서울 열린데이터광장 `OA-12914` https://data.seoul.go.kr/dataList/OA-12914/S/1/datasetView.do |
+| 버스 정류장/노선별 시간대별 승하차 인원 | `bus_time_station_202604.csv` | 서울 열린데이터광장 `OA-12913` https://data.seoul.go.kr/dataList/OA-12913/S/1/datasetView.do |
+| 상권분석서비스 영역-행정동 | `seoul_admin_dong_area.zip` | 서울 열린데이터광장 `OA-22160` https://data.seoul.go.kr/dataList/OA-22160/S/1/datasetView.do |
+| 행정동단위 10개 관심집단수 | `seoul_living_interest_groups_202512.xlsx` | 서울 열린데이터광장 `OA-22266` https://data.seoul.go.kr/dataList/OA-22266/F/1/datasetView.do |
+| 서울 시민생활 데이터 안내 | metadata HTML | 서울 열린데이터광장 https://data.seoul.go.kr/dataVisual/seoul/seoulLiving.do |
+| 행정동별 추정매출 | `seoul_commercial_sales_latest.csv` | 서울 열린데이터광장 `OA-22175` https://data.seoul.go.kr/dataList/OA-22175/A/1/datasetView.do |
+| 서울 생활인구, 내국인, 행정동별 시간대별 | `seoul_living_population_latest.csv` | 서울 열린데이터광장 `OA-14991` https://data.seoul.go.kr/dataList/OA-14991/A/1/datasetView.do |
+| 행정동 경계 shapefile | `seoul_admin_dong_boundary.zip` | 국가공간정보포털(NSDI), 통계청 SGIS, 또는 서울 열린데이터광장 `OA-11677` https://data.seoul.go.kr/dataList/OA-11677/S/1/datasetView.do |
+| 도시계획 용도지역지구도 | `seoul_land_use_zone.zip` | 국토교통부 VWORLD, 서울시 도시공간정보서비스, 국가공간정보포털 |
+| 행정동-법정동 코드 매핑 | `data_archive/metadata/bjdong_admdong_mapping.csv` | 행정안전부 행정동 코드, 통계청 법정동 코드, data.go.kr, SGIS |
+| 수도권 생활이동 수단 데이터 | 현재 기본 분석 미사용 | 서울 열린데이터광장 `OA-22658` https://data.seoul.go.kr/dataList/OA-22658/F/1/datasetView.do |
+
+`subway_station_coordinates.csv`, `bus_stop_coordinates.csv`처럼 다운로드 원천이 문서화되지 않은 좌표 파일은 기본 필수 입력에서 제외했습니다. 해당 파일을 별도로 준비한 경우에만 `transport_access_by_dong.csv` 보조 산출물을 생성합니다.
 
 ## Setup
 
@@ -90,7 +110,7 @@ python3 seoul_mobility_analysis.py
 python3 seoul_mobility_visualize.py
 ```
 
-분석 시작 직후 필수 입력 파일 preflight를 수행합니다. 매출, 생활인구, GIS, 법정동 매핑, 역·정류장 좌표가 없으면 대용량 생활이동 파일을 읽기 전에 중단하고 누락 목록을 출력합니다.
+분석 시작 직후 필수 입력 파일 preflight를 수행합니다. 매출, 생활인구, GIS, 법정동 매핑이 없으면 대용량 생활이동 파일을 읽기 전에 중단하고 누락 목록을 출력합니다.
 
 환경변수로 경로를 오버라이드할 수 있습니다.
 
@@ -107,13 +127,13 @@ python3 seoul_mobility_visualize.py
 
 #### `Seoul_Mobility_Full_Pipeline.ipynb` (권장)
 
-데이터 다운로드부터 분석·시각화까지 한 번에 실행하는 자동화 파이프라인입니다. GIS/좌표/법정동 파일은 Step 4-6에서 직접 URL을 넣어 다운로드하거나 Colab 업로드 창으로 준비합니다. 분석 스크립트는 기본적으로 결과물 commit/push까지 시도하므로, 결과만 확인하려면 `SEOUL_SKIP_GIT=1`을 설정하세요.
+데이터 다운로드부터 분석·시각화까지 한 번에 실행하는 자동화 파이프라인입니다. GIS/법정동 파일은 Step 4-6에서 직접 URL을 넣어 다운로드하거나 Colab 업로드 창으로 준비합니다. 분석 스크립트는 기본적으로 결과물 commit/push까지 시도하므로, 결과만 확인하려면 `SEOUL_SKIP_GIT=1`을 설정하세요.
 
 1. Google Drive 마운트
 2. GitHub에서 최신 코드 clone/pull
 3. 서울 열린데이터광장에서 직접 데이터 다운로드 (약 3 GB, 72개 파일) → Drive 저장
 4. 불량 ZIP 파일 자동 감지·삭제
-5. 필수 GIS·좌표·법정동 파일 준비
+5. 필수 GIS·법정동 파일 준비
 6. `seoul_mobility_analysis.py` 실행
 7. 시각화 차트 생성 및 Drive 저장
 
@@ -173,7 +193,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `living_migration_age_hourly_summary.csv` | 연령대별 행정동·시간대 요약 |
 | `living_migration_age_purpose_summary.csv` | 연령대별 행정동·이동목적 요약 |
 | `candidate_explanations.csv` | 후보 지역별 상위/하위 자동 설명 요약 |
-| `transport_access_by_dong.csv` | 역·정류장 좌표와 행정동 경계를 결합한 행정동별 교통 접근성 지표 |
+| `transport_access_by_dong.csv` | 선택 좌표 파일이 있을 때만 생성되는 행정동별 교통 접근성 지표 |
 
 **reports/**
 
@@ -189,6 +209,23 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `bjdong_commercial_candidate_top20.md` | 법정동 단위 상권 잠재력 상위 20 + 하위 5 |
 | `candidate_explanation_report.md` | 후보 지역별 상위/하위 자동 설명 리포트 |
 | `interpretation_report.md` | 전체 결과 해석 보고서 |
+
+**reports/viz/**
+
+| 파일 | 시각화 자료 | 목적 |
+|---|---|---|
+| `01_top15_monthly_score_trend.png` | 방문성 후보 Top 15 월별 보정 점수 추세 | 최신 월 상위 후보의 `adjusted_mobility_score`가 장기적으로 안정적인지, 일시적 급등인지 확인 |
+| `02_heatmap_dong_month.png` | 방문성 후보 Top 30 행정동-월 히트맵 | 후보별 월간 강약, 계절성, 특정 월 이상치를 색으로 비교 |
+| `03_score_slope_ranking.png` | 상승/하락 기울기 Top 15 비교 | 점수가 올라가는 후보와 약해지는 후보를 분리 |
+| `04_latest_month_top20.png` | 최신 월 방문성 후보 Top 20 | 현재 우선 검토할 행정동 후보 순위 확인 |
+| `05_candidate_type_distribution.png` | 후보 유형과 거주성 필터 분포 | 이동 성격이 방문성인지 거주성인지 유형별로 점검 |
+| `06_total_2030_monthly_trend.png` | 서울 전체 2030 유입량 월별 추이 | 개별 후보 변화가 전체 이동량 변동의 영향인지 확인 |
+| `07_bump_chart_visitor_rank.png` | 방문성 후보 Top 10 월별 순위 변화 | 후보 간 상대 순위의 안정성과 급등락 확인 |
+| `08_visit_pattern_type.png` | 방문 패턴 유형 분포 | 목적 방문형, 복합형, 생활 밀착형, 불명확 비중 요약 |
+| `09_commercial_potential_scatter.png` | 이동 보정 점수와 상권 잠재력 점수 산점도 | 이동 신호와 매출·용도지역·유동인구 보정 후 점수의 차이 확인 |
+| `10_bjdong_top20.png` | 법정동 상권 잠재력 Top 20 | 법정동 단위로 최종 후보를 비교 |
+
+시각화 스크립트는 매 실행마다 `output/reports/viz/run_###/README.md`를 함께 생성해 각 PNG의 목적과 해석 포인트를 설명합니다.
 
 ## Current Scoring Logic
 
@@ -211,6 +248,20 @@ adjusted_mobility_score =
 ```
 
 `residential_dominance_score`는 서울 시민생활 데이터의 2030 1인가구수, 2030 1인가구 비율, 외출 적은 집단 비중을 조합해 계산합니다.
+
+최종 상권 후보 정렬에는 `commercial_potential_score`를 사용합니다.
+
+```text
+commercial_potential_score =
+  adjusted_mobility_score
++ 0.5 * z(commercial_zone_ratio)
++ 0.7 * z(log1p(total_sales))
++ 0.4 * z(daytime_influx_ratio)
++ visit_bonus
+- 0.3 * z(residential_zone_ratio)
+```
+
+`visit_bonus`는 `목적 방문형`에 +0.5, `복합형`에 +0.2를 부여합니다. 좌표 출처가 문서화되지 않은 역·정류장 좌표 파일은 이 점수의 필수 구성 요소가 아닙니다.
 
 월별 분석에서는 같은 점수식을 각 월 안에서 다시 표준화합니다. 이렇게 해야 월별 전체 이동량 차이가 아니라, 해당 월 안에서 상대적으로 강한 행정동을 비교할 수 있습니다.
 
