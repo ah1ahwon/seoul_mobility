@@ -64,19 +64,39 @@
   - 서울 시민생활 데이터 행정동단위 10개 관심집단수, 2025년 12월
   - 2030 1인가구 거주성 보정용
 - `seoul_commercial_sales_latest.csv`
-  - 행정동별 추정매출, `commercial_potential_score` 필수 레이어
+  - 행정동별 추정매출, `commercial_validation_score` 필수 레이어
 - `seoul_living_population_latest.csv`
   - 행정동별 시간대별 생활인구, 낮/심야 2030 유입 비율 계산용
-- `seoul_land_use_zone.zip`, `seoul_admin_dong_boundary.zip`
-  - 용도지역·행정동 경계 공간 결합 필수 레이어
 - `data_archive/metadata/bjdong_admdong_mapping.csv`
-  - 행정동-법정동 공식 매핑 파일
+  - 행정동-법정동 공식 매핑 파일. 없으면 행정동명 기반 근사 집계 사용
 
-위 필수 레이어가 없으면 기본 실행은 중단됩니다. 개발용 부분 실행이 필요할 때만 `SEOUL_ALLOW_PARTIAL=1`을 사용하세요.
+매출·생활인구 필수 레이어가 없으면 기본 실행은 중단됩니다.
+
+## 이동 상권 점수 체계
+
+현재 분석은 이동 상권 후보를 세 단계로 나눠 해석합니다.
+
+```text
+mobility_signal_score
+  = adjusted_mobility_score
+  = mobility_score - 0.7 * residential_dominance_score
+
+commercial_validation_score
+  = 0.7 * z(log1p(total_sales))
+  + 0.4 * z(daytime_influx_ratio)
+  + visit_bonus
+
+final_candidate_score
+  = mobility_signal_score + commercial_validation_score
+```
+
+`mobility_signal_score`는 2030 이동데이터에서 먼저 나타나는 방문 신호이고, `commercial_validation_score`는 매출·생활인구·방문패턴으로 그 신호가 상권성으로 해석될 수 있는지 보정한 점수입니다. `final_candidate_score`는 최종 후보 우선순위입니다.
+
+결과 CSV에는 `enrichment_status`가 함께 저장됩니다. 이 값에 `매출 미반영`, `생활인구 미반영`이 있으면 최종 점수는 아직 이동 기반 후보 발굴 성격이 강하므로, 해당 raw 데이터를 채운 뒤 재실행해서 상권 검증 점수로 해석해야 합니다.
 
 ## Data Sources
 
-분석 재현성을 위해 다운로드 원천이 확인된 데이터만 기본 입력으로 사용합니다. 이동데이터를 핵심 출발점으로 두고, 시민생활·매출·생활인구·용도지역 데이터는 후보 우선순위의 신뢰도를 높이는 보조 근거로 사용합니다.
+분석 재현성을 위해 다운로드 원천이 확인된 데이터만 기본 입력으로 사용합니다. 이동데이터를 핵심 출발점으로 두고, 시민생활·매출·생활인구 데이터는 후보 우선순위의 신뢰도를 높이는 보조 근거로 사용합니다.
 각 원천 데이터의 어떤 컬럼을 어떤 지표로 쓰는지는 [`DATA_USAGE.md`](DATA_USAGE.md)에 정리했습니다.
 분석 결과를 공유용 보고서 형태로 보려면 [`ANALYSIS_RESULT_SUMMARY.md`](ANALYSIS_RESULT_SUMMARY.md)를 확인하세요.
 
@@ -91,12 +111,10 @@
 | 서울 시민생활 데이터 안내 | metadata HTML | 서울 열린데이터광장 https://data.seoul.go.kr/dataVisual/seoul/seoulLiving.do |
 | 행정동별 추정매출 | `seoul_commercial_sales_latest.csv` | 서울 열린데이터광장 `OA-22175` https://data.seoul.go.kr/dataList/OA-22175/A/1/datasetView.do |
 | 서울 생활인구, 내국인, 행정동별 시간대별 | `seoul_living_population_latest.csv` | 서울 열린데이터광장 `OA-14991` https://data.seoul.go.kr/dataList/OA-14991/A/1/datasetView.do |
-| 행정동 경계 shapefile | `seoul_admin_dong_boundary.zip` | 국가공간정보포털(NSDI), 통계청 SGIS, 또는 서울 열린데이터광장 `OA-11677` https://data.seoul.go.kr/dataList/OA-11677/S/1/datasetView.do |
-| 도시계획 용도지역지구도 | `seoul_land_use_zone.zip` | 국토교통부 VWORLD, 서울시 도시공간정보서비스, 국가공간정보포털 |
-| 행정동-법정동 코드 매핑 | `data_archive/metadata/bjdong_admdong_mapping.csv` | 행정안전부 행정동 코드, 통계청 법정동 코드, data.go.kr, SGIS |
+| 행정동-법정동 코드 매핑 | `data_archive/metadata/bjdong_admdong_mapping.csv` | 선택 입력. 없으면 행정동명 기반 근사 집계 |
 | 수도권 생활이동 수단 데이터 | 현재 기본 분석 미사용 | 서울 열린데이터광장 `OA-22658` https://data.seoul.go.kr/dataList/OA-22658/F/1/datasetView.do |
 
-`subway_station_coordinates.csv`, `bus_stop_coordinates.csv`처럼 다운로드 원천이 문서화되지 않은 좌표 파일은 기본 필수 입력에서 제외했습니다. 해당 파일을 별도로 준비한 경우에만 `transport_access_by_dong.csv` 보조 산출물을 생성합니다.
+GIS, 행정동 경계, 역·정류장 좌표처럼 다운로드 원천과 재현성이 불안정한 공간 데이터는 기본 분석에서 제외했습니다.
 
 ## Setup
 
@@ -114,7 +132,7 @@ python3 seoul_mobility_analysis.py
 python3 seoul_mobility_visualize.py
 ```
 
-분석 시작 직후 필수 입력 파일 preflight를 수행합니다. 매출, 생활인구, GIS, 법정동 매핑이 없으면 대용량 생활이동 파일을 읽기 전에 중단하고 누락 목록을 출력합니다.
+분석 시작 직후 필수 입력 파일 preflight를 수행합니다. 매출, 생활인구, 생활이동 등 재현 가능한 필수 파일이 없으면 대용량 생활이동 파일을 읽기 전에 중단하고 누락 목록을 출력합니다.
 
 환경변수로 경로를 오버라이드할 수 있습니다.
 
@@ -123,7 +141,6 @@ python3 seoul_mobility_visualize.py
 | `SEOUL_RAW_DIR` | `data_archive/raw/` | 원천 파일 위치 |
 | `SEOUL_OUTPUT_DIR` | `output/` (스크립트 기준) | 결과 파일 저장 위치 |
 | `SEOUL_SKIP_GIT` | 미설정 | `1`이면 분석 후 자동 commit/push를 건너뜀 |
-| `SEOUL_ALLOW_PARTIAL` | 미설정 | 개발용. `1`이면 필수 레이어 누락 시 부분 실행 허용 |
 
 ### Google Colab 실행
 
@@ -131,15 +148,14 @@ python3 seoul_mobility_visualize.py
 
 #### `Seoul_Mobility_Full_Pipeline.ipynb` (권장)
 
-데이터 다운로드부터 분석·시각화까지 한 번에 실행하는 자동화 파이프라인입니다. GIS/법정동 파일은 Step 4-6에서 직접 URL을 넣어 다운로드하거나 Colab 업로드 창으로 준비합니다. 분석 스크립트는 기본적으로 결과물 commit/push까지 시도하므로, 결과만 확인하려면 `SEOUL_SKIP_GIT=1`을 설정하세요.
+데이터 다운로드부터 분석·시각화까지 한 번에 실행하는 자동화 파이프라인입니다. 분석 스크립트는 기본적으로 결과물 commit/push까지 시도하므로, 결과만 확인하려면 `SEOUL_SKIP_GIT=1`을 설정하세요.
 
 1. Google Drive 마운트
 2. GitHub에서 최신 코드 clone/pull
 3. 서울 열린데이터광장에서 직접 데이터 다운로드 (약 3 GB, 72개 파일) → Drive 저장
 4. 불량 ZIP 파일 자동 감지·삭제
-5. 필수 GIS·법정동 파일 준비
-6. `seoul_mobility_analysis.py` 실행
-7. 시각화 차트 생성 및 Drive 저장
+5. `seoul_mobility_analysis.py` 실행
+6. 시각화 차트 생성 및 Drive 저장
 
 분석 결과와 시각화 파일은 `/content/` 로컬 세션이 아니라
 `/content/drive/MyDrive/seoul_mobility/output`에 바로 저장됩니다.
@@ -197,7 +213,6 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `living_migration_age_hourly_summary.csv` | 연령대별 행정동·시간대 요약 |
 | `living_migration_age_purpose_summary.csv` | 연령대별 행정동·이동목적 요약 |
 | `candidate_explanations.csv` | 후보 지역별 상위/하위 자동 설명 요약 |
-| `transport_access_by_dong.csv` | 선택 좌표 파일이 있을 때만 생성되는 행정동별 교통 접근성 지표 |
 
 **reports/**
 
@@ -226,7 +241,7 @@ os.environ["SEOUL_OUTPUT_DIR"] = "/content/drive/MyDrive/seoul_mobility/output"
 | `06_total_2030_monthly_trend.png` | 서울 전체 2030 유입량 월별 추이 | 개별 후보 변화가 전체 이동량 변동의 영향인지 확인 |
 | `07_bump_chart_visitor_rank.png` | 방문성 후보 Top 10 월별 순위 변화 | 후보 간 상대 순위의 안정성과 급등락 확인 |
 | `08_visit_pattern_type.png` | 방문 패턴 유형 분포 | 목적 방문형, 복합형, 생활 밀착형, 불명확 비중 요약 |
-| `09_commercial_potential_scatter.png` | 이동 보정 점수와 상권 잠재력 점수 산점도 | 이동 신호와 매출·용도지역·유동인구 보정 후 점수의 차이 확인 |
+| `09_commercial_potential_scatter.png` | 이동 신호 점수와 최종 후보 점수 산점도 | 이동 신호와 매출·생활인구 보정 후 점수의 차이 확인 |
 | `10_bjdong_top20.png` | 법정동 상권 잠재력 Top 20 | 법정동 단위로 최종 후보를 비교 |
 
 시각화 스크립트는 매 실행마다 `output/reports/viz/run_###/README.md`를 함께 생성해 각 PNG의 목적과 해석 포인트를 설명합니다.
@@ -253,19 +268,22 @@ adjusted_mobility_score =
 
 `residential_dominance_score`는 서울 시민생활 데이터의 2030 1인가구수, 2030 1인가구 비율, 외출 적은 집단 비중을 조합해 계산합니다.
 
-최종 상권 후보 정렬에는 `commercial_potential_score`를 사용합니다.
+최종 상권 후보 정렬에는 `final_candidate_score`를 사용합니다. `commercial_potential_score`는 기존 산출물 호환을 위해 같은 값을 담는 별칭입니다.
 
 ```text
-commercial_potential_score =
+mobility_signal_score =
   adjusted_mobility_score
-+ 0.5 * z(commercial_zone_ratio)
+
+commercial_validation_score =
 + 0.7 * z(log1p(total_sales))
 + 0.4 * z(daytime_influx_ratio)
 + visit_bonus
-- 0.3 * z(residential_zone_ratio)
+
+final_candidate_score =
+  mobility_signal_score + commercial_validation_score
 ```
 
-`visit_bonus`는 `목적 방문형`에 +0.5, `복합형`에 +0.2를 부여합니다. 좌표 출처가 문서화되지 않은 역·정류장 좌표 파일은 이 점수의 필수 구성 요소가 아닙니다.
+`visit_bonus`는 `목적 방문형`에 +0.5, `복합형`에 +0.2를 부여합니다. 좌표 출처가 문서화되지 않은 역·정류장 좌표 파일은 기본 분석에서 제외했습니다.
 
 월별 분석에서는 같은 점수식을 각 월 안에서 다시 표준화합니다. 이렇게 해야 월별 전체 이동량 차이가 아니라, 해당 월 안에서 상대적으로 강한 행정동을 비교할 수 있습니다.
 
