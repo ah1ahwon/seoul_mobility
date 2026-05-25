@@ -73,20 +73,11 @@ LIVING_INTEREST_XLSX = RAW_DIR / "seoul_living_interest_groups_202512.xlsx"
 # download_bjdong_mapping.sh 로 생성
 BJDONG_MAPPING_CSV = ARCHIVE_DIR / "metadata" / "bjdong_admdong_mapping.csv"
 
-# GIS: 서울시 용도지역지구도 + 행정동 경계 shapefile ZIP
-# 서울 열린데이터광장 / 국가공간정보포털에서 다운로드 (download_gis_data.sh)
-LAND_USE_ZIP = RAW_DIR / "seoul_land_use_zone.zip"
-ADMIN_DONG_BOUNDARY_ZIP = RAW_DIR / "seoul_admin_dong_boundary.zip"
-
 # 서울시 상권분석서비스 — 행정동별 추정매출 (download_commercial_sales.sh)
 COMMERCIAL_SALES_CSV = RAW_DIR / "seoul_commercial_sales_latest.csv"
 
 # 서울 생활인구 — 행정동별 시간대별 추정 유동인구 (download_living_population.sh)
 LIVING_POPULATION_CSV = RAW_DIR / "seoul_living_population_latest.csv"
-
-# 선택 좌표 파일: 출처가 확인된 경우에만 행정동 경계와 공간 결합해 교통 접근성 지표 생성
-SUBWAY_STATION_COORD_CSV = RAW_DIR / "subway_station_coordinates.csv"
-BUS_STOP_COORD_CSV = RAW_DIR / "bus_stop_coordinates.csv"
 
 ADMDONG_CODE_CSV = ARCHIVE_DIR / "metadata" / "seoul_admdong_code.csv"
 
@@ -144,21 +135,13 @@ def ensure_output_dirs() -> None:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def allow_partial_run() -> bool:
-    """Return True only for development runs that intentionally allow missing required layers."""
-    return os.environ.get("SEOUL_ALLOW_PARTIAL") == "1"
-
-
 def require_input(path: Path, label: str, hint: str = "") -> bool:
-    """Require an input file unless SEOUL_ALLOW_PARTIAL=1 is explicitly set."""
+    """Require an input file for the reproducible base analysis."""
     if path.exists():
         return True
     message = f"{label} 파일 없음: {path}"
     if hint:
         message += f"\n   준비 방법: {hint}"
-    if allow_partial_run():
-        print(f"   {message} — SEOUL_ALLOW_PARTIAL=1 이므로 건너뜀")
-        return False
     raise FileNotFoundError(message)
 
 
@@ -171,9 +154,6 @@ def validate_required_inputs() -> None:
         (BUS_CSV, "버스 승하차", "bash data_archive/scripts/download_latest_examples.sh"),
         (COMMERCIAL_SALES_CSV, "매출 데이터", "bash data_archive/scripts/download_commercial_sales.sh"),
         (LIVING_POPULATION_CSV, "생활인구 데이터", "bash data_archive/scripts/download_living_population.sh"),
-        (LAND_USE_ZIP, "용도지역", "bash data_archive/scripts/download_gis_data.sh"),
-        (ADMIN_DONG_BOUNDARY_ZIP, "행정동 경계", "bash data_archive/scripts/download_gis_data.sh"),
-        (BJDONG_MAPPING_CSV, "행정동-법정동 매핑", "bash data_archive/scripts/download_bjdong_mapping.sh"),
     ]
     missing_messages = []
     for path, label, hint in required_files:
@@ -187,16 +167,10 @@ def validate_required_inputs() -> None:
             "  준비 방법: bash data_archive/scripts/download_living_migration_202603.sh"
         )
 
-    if missing_messages and allow_partial_run():
-        print("0. Required input preflight...")
-        print("   SEOUL_ALLOW_PARTIAL=1 — missing inputs will be skipped where supported:")
-        print("\n".join(missing_messages))
-        return
     if missing_messages:
         raise FileNotFoundError(
             "필수 입력 파일이 부족해 분석을 시작하지 않습니다.\n"
             + "\n".join(missing_messages)
-            + "\n\n개발용 부분 실행이 필요할 때만 SEOUL_ALLOW_PARTIAL=1을 설정하세요."
         )
 
     print("0. Required input preflight passed.")
@@ -300,7 +274,7 @@ def clean_bus(input_path: Path = BUS_CSV) -> tuple[pd.DataFrame, pd.DataFrame]:
 def read_admin_dong_mapping(input_path: Path = ADMIN_DONG_AREA_ZIP) -> pd.DataFrame:
     """
     Read ADSTRD_CD -> ADSTRD_NM mapping from the archived Seoul admin-dong
-    area shapefile ZIP. This avoids requiring geopandas/fiona.
+    area ZIP. The code reads the DBF directly with standard-library helpers.
     """
     with ZipFile(input_path) as zf:
         dbf_name = next(name for name in zf.namelist() if name.lower().endswith(".dbf"))
@@ -625,6 +599,12 @@ def summarize_living_migration(
                 chunk.loc[chunk["2030_cnt"] > 0, ["d_admdong_cd", "etl_ymd"]].drop_duplicates()
             )
 
+    if not dest_parts:
+        raise FileNotFoundError(
+            "No valid living-migration ZIP files could be read. "
+            f"Check or re-download files matching: {RAW_DIR / LIVING_MIGRATION_PATTERN}"
+        )
+
     dest = pd.concat(dest_parts, ignore_index=True)
     dest = dest.groupby("d_admdong_cd", as_index=False).sum(numeric_only=True)
 
@@ -772,6 +752,12 @@ def summarize_living_migration_monthly(
                 chunk.loc[chunk["2030_cnt"] > 0, ["yyyymm", "d_admdong_cd", "etl_ymd"]]
                 .drop_duplicates()
             )
+
+    if not dest_parts:
+        raise FileNotFoundError(
+            "No valid monthly living-migration ZIP files could be read. "
+            "Re-run data_archive/scripts/download_living_migration_month_end.sh."
+        )
 
     for input_path in input_paths:
         yyyymm = re.search(r"_(\d{6})\d{2}\.zip$", input_path.name)
@@ -1194,26 +1180,19 @@ def load_bjdong_mapping(
     행정동코드 → 법정동코드/법정동명 매핑 CSV 로드.
 
     CSV 컬럼 형식: admdong_cd, bjdong_cd, bjdong_nm
-    파일이 없으면 기본 실행에서는 실패. SEOUL_ALLOW_PARTIAL=1이면 이름 패턴 근사치 사용.
+    파일이 없으면 행정동명 기반 근사치(예: 잠실6동 → 잠실동)를 사용한다.
 
     다운로드: bash data_archive/scripts/download_bjdong_mapping.sh
     출처: 행정안전부 행정동-법정동 코드 대응표
     """
     if not mapping_path.exists():
-        if allow_partial_run():
-            print(f"   법정동 매핑 없음 ({mapping_path.name}) — SEOUL_ALLOW_PARTIAL=1 이므로 이름 패턴 근사치 사용")
-            return None
-        raise FileNotFoundError(
-            f"법정동 매핑 파일 없음: {mapping_path}\n"
-            "   준비 방법: bash data_archive/scripts/download_bjdong_mapping.sh"
-        )
+        print(f"   법정동 공식 매핑 없음 ({mapping_path.name}) — 행정동명 기반 근사 집계 사용")
+        return None
     df = pd.read_csv(mapping_path, dtype={"admdong_cd": "string", "bjdong_cd": "string"})
     required = {"admdong_cd", "bjdong_cd", "bjdong_nm"}
     if not required.issubset(df.columns):
-        if allow_partial_run():
-            print(f"   법정동 매핑 컬럼 부족 — SEOUL_ALLOW_PARTIAL=1 이므로 이름 패턴 근사치 사용")
-            return None
-        raise ValueError(f"법정동 매핑 컬럼 부족: 필요 컬럼 {sorted(required)}")
+        print(f"   법정동 매핑 컬럼 부족 — 행정동명 기반 근사 집계 사용: 필요 컬럼 {sorted(required)}")
+        return None
     return df
 
 
@@ -1250,120 +1229,14 @@ def aggregate_to_bjdong(
     agg_dict: dict = {c: "sum" for c in sum_cols if c in df.columns}
     agg_dict.update({c: "mean" for c in score_cols if c in df.columns})
     agg_dict.update({c: "first" for c in key_cols if c in df.columns and c not in group_cols})
-    for cat_col in ["candidate_type", "visit_pattern_type", "residential_filter"]:
+    for cat_col in ["candidate_type", "visit_pattern_type", "residential_filter", "enrichment_status"]:
         if cat_col in df.columns:
             agg_dict[cat_col] = lambda s: s.value_counts().index[0] if len(s) > 0 else "불명확"
 
     result = df.groupby(group_cols, as_index=False, dropna=False).agg(agg_dict)
-    sort_col = "commercial_potential_score" if "commercial_potential_score" in result.columns else "adjusted_mobility_score"
+    sort_col = "final_candidate_score" if "final_candidate_score" in result.columns else "adjusted_mobility_score"
     if sort_col in result.columns:
         result = result.sort_values(sort_col, ascending=False)
-    return result
-
-
-# ---------------------------------------------------------------------------
-# GIS 용도지역 분석 (필수 레이어, geopandas 필요)
-# ---------------------------------------------------------------------------
-
-def summarize_land_use_by_dong(
-    land_use_path: Path = LAND_USE_ZIP,
-    admin_dong_path: Path = ADMIN_DONG_BOUNDARY_ZIP,
-) -> pd.DataFrame:
-    """
-    행정동별 용도지역(상업·주거·준주거·공업·녹지) 면적 비율 계산.
-
-    필요 파일
-    ----------
-    LAND_USE_ZIP: 서울시 도시계획 용도지역지구도 shapefile ZIP
-        서울시 도시공간정보서비스 또는 국토교통부 VWORLD
-    ADMIN_DONG_BOUNDARY_ZIP: 서울시 행정동 경계 shapefile ZIP
-        국가공간정보포털(ngii.go.kr) 또는 SGIS(sgis.kostat.go.kr)
-
-    다운로드: bash data_archive/scripts/download_gis_data.sh
-
-    반환 컬럼
-    ----------
-    d_admdong_cd, commercial_zone_ratio, residential_zone_ratio,
-    semi_residential_zone_ratio, industrial_zone_ratio, green_zone_ratio
-    """
-    if not require_input(land_use_path, "용도지역", "bash data_archive/scripts/download_gis_data.sh"):
-        return pd.DataFrame()
-    if not require_input(admin_dong_path, "행정동 경계", "bash data_archive/scripts/download_gis_data.sh"):
-        return pd.DataFrame()
-    try:
-        import geopandas as gpd
-    except ImportError:
-        if allow_partial_run():
-            print("   geopandas 미설치 — SEOUL_ALLOW_PARTIAL=1 이므로 GIS 분석 건너뜀 (pip install geopandas)")
-            return pd.DataFrame()
-        raise ImportError("geopandas 미설치: pip install geopandas shapely")
-
-    print("   행정동 경계 로드...")
-    dongs = gpd.read_file(f"zip://{admin_dong_path}")
-    print("   용도지역 로드...")
-    land_use = gpd.read_file(f"zip://{land_use_path}")
-    land_use = land_use.to_crs(dongs.crs)
-
-    cd_col = next(
-        (c for c in dongs.columns if any(k in c.lower() for k in ["adm", "emd", "dong_cd", "hjdong"])),
-        None,
-    )
-    zone_col = next(
-        (c for c in land_use.columns if any(k in c for k in ["용도", "UNAME", "zone"])),
-        None,
-    )
-    if cd_col is None or zone_col is None:
-        if allow_partial_run():
-            print(f"   컬럼 탐지 실패 (dong={cd_col}, zone={zone_col}) — SEOUL_ALLOW_PARTIAL=1 이므로 GIS 분석 건너뜀")
-            return pd.DataFrame()
-        raise ValueError(f"GIS 컬럼 탐지 실패 (dong={cd_col}, zone={zone_col})")
-
-    print("   공간 교차 분석 중 (시간 소요)...")
-    inter = gpd.overlay(
-        dongs[[cd_col, "geometry"]].rename(columns={cd_col: "admdong_cd"}),
-        land_use[[zone_col, "geometry"]].rename(columns={zone_col: "zone_type"}),
-        how="intersection",
-        keep_geom_type=True,
-    )
-    inter["area_m2"] = inter.geometry.area
-
-    def _classify_zone(name: str) -> str:
-        if not isinstance(name, str):
-            return "기타"
-        if "상업" in name:
-            return "commercial"
-        if "준주거" in name:
-            return "semi_residential"
-        if "주거" in name:
-            return "residential"
-        if "공업" in name or "준공업" in name:
-            return "industrial"
-        if "녹지" in name:
-            return "green"
-        return "기타"
-
-    inter["zone_class"] = inter["zone_type"].apply(_classify_zone)
-    dong_total = inter.groupby("admdong_cd")["area_m2"].sum()
-    pivot = (
-        inter.groupby(["admdong_cd", "zone_class"])["area_m2"]
-        .sum()
-        .unstack(fill_value=0.0)
-    )
-    for cls in ["commercial", "residential", "semi_residential", "industrial", "green"]:
-        if cls not in pivot.columns:
-            pivot[cls] = 0.0
-    pivot = pivot.div(dong_total, axis=0).fillna(0.0)
-    result = pivot[["commercial", "residential", "semi_residential", "industrial", "green"]].rename(
-        columns={
-            "commercial": "commercial_zone_ratio",
-            "residential": "residential_zone_ratio",
-            "semi_residential": "semi_residential_zone_ratio",
-            "industrial": "industrial_zone_ratio",
-            "green": "green_zone_ratio",
-        }
-    ).reset_index().rename(columns={"admdong_cd": "d_admdong_cd"})
-    result["d_admdong_cd"] = result["d_admdong_cd"].astype(str)
-    print(f"   용도지역 분석 완료: {len(result)}개 행정동")
     return result
 
 
@@ -1576,57 +1449,62 @@ def summarize_population_ratio(
 
 def add_commercial_potential_score(
     dest: pd.DataFrame,
-    land_use: pd.DataFrame | None = None,
     sales: pd.DataFrame | None = None,
     pop_ratio: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
-    adjusted_mobility_score에 용도지역·매출·유동인구·방문패턴을 결합해
-    commercial_potential_score(상권 잠재력 점수)를 계산.
+    이동 신호, 상권 검증 신호, 최종 후보 점수를 분리해 계산.
 
-    데이터가 없는 요소는 z-score = 0으로 처리(영향 없음).
+    데이터가 없는 검증 요소는 z-score = 0으로 처리(영향 없음)하되
+    enrichment_status에 결합 상태를 남긴다.
 
     점수 구성
     ---------
-    + adjusted_mobility_score          (이동·거주성 보정)
-    + 0.5 * z(commercial_zone_ratio)   (상업지역 비율: 실제 상권 입지)
-    + 0.7 * z(log1p(total_sales))      (매출 발생: 단순 통행이 아닌 소비 확인)
-    + 0.4 * z(daytime_influx_ratio)    (유동인구 유입: 상주 대비 방문자 강세)
-    + visit_bonus (목적방문형+0.5, 복합형+0.2) (요일 패턴 보정)
-    - 0.3 * z(residential_zone_ratio)  (순 주거지역 비율: 상권 적합성 감점)
+    mobility_signal_score = adjusted_mobility_score
+
+    commercial_validation_score =
+      0.7 * z(log1p(total_sales))
+    + 0.4 * z(daytime_influx_ratio)
+    + visit_bonus (목적방문형+0.5, 복합형+0.2)
+
+    final_candidate_score =
+      mobility_signal_score + commercial_validation_score
     """
     df = dest.copy()
 
-    # 용도지역 결합
-    if land_use is not None and not land_use.empty:
-        lu = land_use.copy()
-        if "d_admdong_cd" not in lu.columns and "admdong_cd" in lu.columns:
-            lu = lu.rename(columns={"admdong_cd": "d_admdong_cd"})
-        df = df.merge(lu, on="d_admdong_cd", how="left")
-    for col in ["commercial_zone_ratio", "residential_zone_ratio"]:
-        if col not in df.columns:
-            df[col] = 0.0
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
-
     # 매출 결합
-    if sales is not None and not sales.empty:
+    sales_available = sales is not None and not sales.empty
+    if sales_available:
         sl = sales.copy()
         if "d_admdong_cd" not in sl.columns and "admdong_cd" in sl.columns:
             sl = sl.rename(columns={"admdong_cd": "d_admdong_cd"})
         df = df.merge(sl, on="d_admdong_cd", how="left")
-    for col in ["total_sales", "sales_per_store", "food_sales_ratio"]:
+    sales_cols = ["total_sales", "sales_per_store", "food_sales_ratio"]
+    for col in sales_cols:
         if col not in df.columns:
-            df[col] = 0.0
+            df[col] = np.nan
+    sales_matched = (
+        df["total_sales"].notna()
+        if sales_available
+        else pd.Series(False, index=df.index)
+    )
+    for col in ["total_sales", "sales_per_store", "food_sales_ratio"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
     # 유동인구 결합
-    if pop_ratio is not None and not pop_ratio.empty:
+    population_available = pop_ratio is not None and not pop_ratio.empty
+    if population_available:
         pr = pop_ratio.copy()
         if "d_admdong_cd" not in pr.columns and "admdong_cd" in pr.columns:
             pr = pr.rename(columns={"admdong_cd": "d_admdong_cd"})
         df = df.merge(pr, on="d_admdong_cd", how="left")
     if "daytime_influx_ratio" not in df.columns:
-        df["daytime_influx_ratio"] = 1.0
+        df["daytime_influx_ratio"] = np.nan
+    population_matched = (
+        df["daytime_influx_ratio"].notna()
+        if population_available
+        else pd.Series(False, index=df.index)
+    )
     df["daytime_influx_ratio"] = pd.to_numeric(df["daytime_influx_ratio"], errors="coerce").fillna(1.0)
 
     # 방문 패턴 가산점
@@ -1642,20 +1520,34 @@ def add_commercial_potential_score(
             return pd.Series(0.0, index=series.index)
         return (series - series.mean()) / std
 
-    z_commercial = _safe_zscore(df["commercial_zone_ratio"])
     z_sales = _safe_zscore(np.log1p(df["total_sales"]))
     z_influx = _safe_zscore(df["daytime_influx_ratio"])
-    z_res_zone = _safe_zscore(df["residential_zone_ratio"])
 
-    df["commercial_potential_score"] = (
-        df["adjusted_mobility_score"]
-        + 0.5 * z_commercial
-        + 0.7 * z_sales
+    df["mobility_signal_score"] = df["adjusted_mobility_score"]
+    df["commercial_validation_score"] = (
+        0.7 * z_sales
         + 0.4 * z_influx
         + visit_bonus
-        - 0.3 * z_res_zone
     )
-    return df.sort_values("commercial_potential_score", ascending=False)
+    df["final_candidate_score"] = df["mobility_signal_score"] + df["commercial_validation_score"]
+    # Backward-compatible alias used by existing reports/visualizations.
+    df["commercial_potential_score"] = df["final_candidate_score"]
+
+    missing_labels = []
+    for sales_ok, pop_ok in zip(sales_matched, population_matched):
+        labels = []
+        if not sales_ok:
+            labels.append("매출 미반영")
+        if not pop_ok:
+            labels.append("생활인구 미반영")
+        missing_labels.append(labels)
+    df["missing_enrichment_count"] = [len(labels) for labels in missing_labels]
+    df["enrichment_status"] = [
+        "완전 결합" if not labels else ", ".join(labels)
+        for labels in missing_labels
+    ]
+
+    return df.sort_values("final_candidate_score", ascending=False)
 
 
 def enrich_monthly_destination_summary(dest: pd.DataFrame, admin_mapping: pd.DataFrame) -> pd.DataFrame:
@@ -1940,127 +1832,6 @@ def summarize_transport_patterns(
     return subway_station, bus_stop, bus_hour
 
 
-def _read_coordinate_csv(input_path: Path) -> pd.DataFrame:
-    """Read a point CSV and normalize common coordinate/name/id columns."""
-    df = pd.read_csv(input_path, encoding="utf-8-sig", low_memory=False)
-    rename_map = {}
-    for col in df.columns:
-        lower = str(col).lower()
-        if col in ["역명", "역사명", "정류장명", "station_nm", "station_name"]:
-            rename_map[col] = "station_name"
-        elif col in ["표준버스정류장ID", "station_id", "NODE_ID", "node_id"]:
-            rename_map[col] = "station_id"
-        elif col in ["버스정류장ARS번호", "ars_id", "ARS_ID", "ars_no"]:
-            rename_map[col] = "ars_id"
-        elif col in ["경도", "lon", "lng", "longitude", "x좌표", "x_coord"] or lower in ["x", "lon", "lng"]:
-            rename_map[col] = "x"
-        elif col in ["위도", "lat", "latitude", "y좌표", "y_coord"] or lower in ["y", "lat"]:
-            rename_map[col] = "y"
-    df = df.rename(columns=rename_map)
-    if "x" not in df.columns or "y" not in df.columns:
-        raise ValueError(f"Coordinate columns not found in {input_path.name}")
-    df["x"] = pd.to_numeric(df["x"], errors="coerce")
-    df["y"] = pd.to_numeric(df["y"], errors="coerce")
-    return df.dropna(subset=["x", "y"]).copy()
-
-
-def _points_from_coordinate_df(df: pd.DataFrame):
-    """Build a GeoDataFrame from normalized x/y columns."""
-    import geopandas as gpd
-
-    crs = "EPSG:4326" if df["x"].abs().max() <= 180 and df["y"].abs().max() <= 90 else "EPSG:5186"
-    return gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df["x"], df["y"]), crs=crs)
-
-
-def summarize_transport_access_by_dong(
-    subway_station: pd.DataFrame,
-    bus_stop: pd.DataFrame,
-    admin_dong_path: Path = ADMIN_DONG_BOUNDARY_ZIP,
-    subway_coord_path: Path = SUBWAY_STATION_COORD_CSV,
-    bus_coord_path: Path = BUS_STOP_COORD_CSV,
-) -> pd.DataFrame:
-    """
-    Spatially join optional station/stop coordinate files to admin-dong boundaries.
-
-    Expected files:
-      - subway_station_coordinates.csv: station_name, longitude/latitude or x/y
-      - bus_stop_coordinates.csv: station_id or ars_id or station_name, longitude/latitude or x/y
-    """
-    if not require_input(admin_dong_path, "행정동 경계", "bash data_archive/scripts/download_gis_data.sh"):
-        return pd.DataFrame()
-    if not subway_coord_path.exists() and not bus_coord_path.exists():
-        print("   역·정류장 좌표 파일 없음 — 출처 미기재 파일은 필수로 요구하지 않고 교통 접근성 공간 결합을 건너뜀")
-        return pd.DataFrame()
-    try:
-        import geopandas as gpd
-    except ImportError:
-        if allow_partial_run():
-            print("   geopandas 미설치 — SEOUL_ALLOW_PARTIAL=1 이므로 교통 접근성 공간 결합 건너뜀")
-            return pd.DataFrame()
-        raise ImportError("geopandas 미설치: pip install geopandas shapely")
-
-    dongs = gpd.read_file(f"zip://{admin_dong_path}")
-    cd_col = next(
-        (c for c in dongs.columns if any(k in c.lower() for k in ["adm", "emd", "dong_cd", "hjdong"])),
-        None,
-    )
-    if cd_col is None:
-        if allow_partial_run():
-            print("   행정동 코드 컬럼 탐지 실패 — SEOUL_ALLOW_PARTIAL=1 이므로 교통 접근성 공간 결합 건너뜀")
-            return pd.DataFrame()
-        raise ValueError("행정동 경계 파일에서 행정동 코드 컬럼을 찾지 못했습니다.")
-    dongs = dongs[[cd_col, "geometry"]].rename(columns={cd_col: "d_admdong_cd"})
-
-    parts = []
-    if subway_coord_path.exists():
-        coords = _read_coordinate_csv(subway_coord_path)
-        if "station_name" in coords.columns:
-            pts = _points_from_coordinate_df(coords).to_crs(dongs.crs)
-            joined = gpd.sjoin(pts, dongs, how="inner", predicate="within")
-            subway_joined = joined.merge(subway_station, on="station_name", how="left")
-            subway_summary = subway_joined.groupby("d_admdong_cd", as_index=False).agg(
-                subway_station_count=("station_name", "nunique"),
-                subway_total_count=("subway_total_count", "sum"),
-            )
-            parts.append(subway_summary)
-
-    if bus_coord_path.exists():
-        coords = _read_coordinate_csv(bus_coord_path)
-        pts = _points_from_coordinate_df(coords).to_crs(dongs.crs)
-        joined = gpd.sjoin(pts, dongs, how="inner", predicate="within")
-        merge_key = next((c for c in ["station_id", "ars_id", "station_name"] if c in joined.columns and c in bus_stop.columns), None)
-        if merge_key is not None:
-            bus_joined = joined.merge(bus_stop, on=merge_key, how="left")
-        else:
-            bus_joined = joined.copy()
-            bus_joined["bus_total_count"] = 0.0
-            bus_joined["route_count"] = 0.0
-        bus_summary = bus_joined.groupby("d_admdong_cd", as_index=False).agg(
-            bus_stop_count=("geometry", "size"),
-            bus_total_count=("bus_total_count", "sum"),
-            bus_route_count=("route_count", "sum"),
-        )
-        parts.append(bus_summary)
-
-    if not parts:
-        return pd.DataFrame()
-    result = parts[0]
-    for part in parts[1:]:
-        result = result.merge(part, on="d_admdong_cd", how="outer")
-    for col in ["subway_station_count", "subway_total_count", "bus_stop_count", "bus_total_count", "bus_route_count"]:
-        if col not in result.columns:
-            result[col] = 0.0
-        result[col] = pd.to_numeric(result[col], errors="coerce").fillna(0.0)
-    result["transport_access_score"] = (
-        zscore(np.log1p(result["subway_total_count"]))
-        + zscore(np.log1p(result["bus_total_count"]))
-        + zscore(np.log1p(result["subway_station_count"] + result["bus_stop_count"]))
-    )
-    result["d_admdong_cd"] = result["d_admdong_cd"].astype(str)
-    print(f"   교통 접근성 공간 결합 완료: {len(result)}개 행정동")
-    return result
-
-
 def dataframe_to_markdown(df: pd.DataFrame) -> str:
     """Make a Markdown table without requiring the optional tabulate package."""
     out = df.copy()
@@ -2082,9 +1853,11 @@ def build_candidate_explanations(dest: pd.DataFrame, top_n: int = 30, bottom_n: 
     source = dest[
         dest["residential_filter"].isin(["방문성 검토", "혼재형 (상권+거주)"])
     ].copy()
-    if "commercial_potential_score" not in source.columns:
-        source["commercial_potential_score"] = source["adjusted_mobility_score"]
-    source = source.sort_values(["commercial_potential_score", "adjusted_mobility_score"], ascending=False)
+    if "final_candidate_score" not in source.columns:
+        source["final_candidate_score"] = source.get("commercial_potential_score", source["adjusted_mobility_score"])
+    if "commercial_validation_score" not in source.columns:
+        source["commercial_validation_score"] = source["final_candidate_score"] - source["adjusted_mobility_score"]
+    source = source.sort_values(["final_candidate_score", "adjusted_mobility_score"], ascending=False)
     thresholds = {
         col: dest[col].quantile(q) if col in dest.columns else None
         for col, q in [
@@ -2098,7 +1871,7 @@ def build_candidate_explanations(dest: pd.DataFrame, top_n: int = 30, bottom_n: 
     rows = []
     slices = [
         ("상위", source.head(top_n)),
-        ("하위", source.tail(bottom_n).sort_values(["commercial_potential_score", "adjusted_mobility_score"])),
+        ("하위", source.tail(bottom_n).sort_values(["final_candidate_score", "adjusted_mobility_score"])),
     ]
     for group, group_df in slices:
         for rank, (_, row) in enumerate(group_df.iterrows(), start=1):
@@ -2127,7 +1900,7 @@ def build_candidate_explanations(dest: pd.DataFrame, top_n: int = 30, bottom_n: 
                 if group == "하위":
                     cautions.append("현재 기준에서는 적극 후보보다 비교·제외 후보로 보는 것이 적절함")
                 else:
-                    cautions.append("이동 데이터가 포착한 초기 유망 상권 후보이며 매출·용도지역·생활인구는 우선순위 신뢰도를 높이는 보조 근거로 확인")
+                    cautions.append("이동 데이터가 포착한 초기 유망 상권 후보이며 매출·생활인구는 우선순위 신뢰도를 높이는 보조 근거로 확인")
             signal_text = " ".join(f"{signal}." for signal in signals)
             caution_text = " ".join(f"{caution}." for caution in cautions)
 
@@ -2140,8 +1913,11 @@ def build_candidate_explanations(dest: pd.DataFrame, top_n: int = 30, bottom_n: 
                     "residential_filter": row["residential_filter"],
                     "candidate_type": row["candidate_type"],
                     "visit_pattern_type": row.get("visit_pattern_type", "불명확"),
-                    "commercial_potential_score": row.get("commercial_potential_score", row["adjusted_mobility_score"]),
+                    "final_candidate_score": row.get("final_candidate_score", row["adjusted_mobility_score"]),
+                    "commercial_validation_score": row.get("commercial_validation_score", 0.0),
+                    "commercial_potential_score": row.get("commercial_potential_score", row.get("final_candidate_score", row["adjusted_mobility_score"])),
                     "adjusted_mobility_score": row["adjusted_mobility_score"],
+                    "enrichment_status": row.get("enrichment_status", "상태 미기록"),
                     "summary": f"{name}은 {row['candidate_type']} 후보입니다. {signal_text}",
                     "caution": caution_text,
                 }
@@ -2166,8 +1942,10 @@ def write_candidate_explanation_report(explanations: pd.DataFrame) -> None:
                 "\n"
                 f"## {row['rank_group']} {int(row['rank'])}. {row['d_gu_name']} {row['d_admdong_name']}\n\n"
                 f"- 분류: {row['residential_filter']} / {row['candidate_type']} / {row['visit_pattern_type']}\n"
-                f"- 점수: commercial_potential_score {row['commercial_potential_score']:.3f}, "
-                f"adjusted_mobility_score {row['adjusted_mobility_score']:.3f}\n"
+                f"- 점수: final_candidate_score {row['final_candidate_score']:.3f}, "
+                f"mobility_signal_score {row['adjusted_mobility_score']:.3f}, "
+                f"commercial_validation_score {row['commercial_validation_score']:.3f}\n"
+                f"- 보조 데이터 결합: {row['enrichment_status']}\n"
                 f"- 해석: {row['summary']}\n"
                 f"- 주의: {row['caution']}\n"
             )
@@ -2181,9 +1959,13 @@ def write_top20_report(dest: pd.DataFrame) -> None:
         "d_admdong_name",
         "residential_filter",
         "candidate_type",
+        "final_candidate_score",
+        "mobility_signal_score",
+        "commercial_validation_score",
         "adjusted_mobility_score",
         "mobility_score",
         "residential_dominance_score",
+        "enrichment_status",
         "cnt_2030",
         "avg_daily_2030",
         "date_count",
@@ -2200,8 +1982,9 @@ def write_top20_report(dest: pd.DataFrame) -> None:
         "# 2030 도착 이동 상위 행정동 Top 20\n\n"
         "이 보고서는 수도권 생활이동 샘플을 기준으로 2030 도착 이동 신호가 강한 "
         "행정동을 순위화한 결과입니다.\n\n"
-        "`mobility_score`는 기존 이동 기반 점수이고, `adjusted_mobility_score`는 "
-        "2030 1인가구 거주 밀집도를 감점한 방문성 보정 점수입니다.\n\n"
+        "`mobility_signal_score`는 2030 이동 신호에서 거주성 효과를 감점한 점수이고, "
+        "`commercial_validation_score`는 매출·생활인구·방문패턴으로 보정한 상권 검증 점수입니다. "
+        "`final_candidate_score`는 두 점수를 합친 최종 후보 점수입니다.\n\n"
         "보정 점수 = 이동 기반 점수 - 0.7 * 2030 자취/거주성 점수.\n\n"
         f"{table}\n"
     )
@@ -2214,9 +1997,13 @@ def write_split_candidate_reports(dest: pd.DataFrame) -> None:
         "d_admdong_name",
         "residential_filter",
         "candidate_type",
+        "final_candidate_score",
+        "mobility_signal_score",
+        "commercial_validation_score",
         "adjusted_mobility_score",
         "mobility_score",
         "residential_dominance_score",
+        "enrichment_status",
         "cnt_2030",
         "share_2030",
         "young_single_households",
@@ -2239,7 +2026,7 @@ def write_split_candidate_reports(dest: pd.DataFrame) -> None:
 
     visitor_report = (
         "# 방문 상권 후보 Top 20\n\n"
-        "2030 1인가구 거주 밀집 신호가 상대적으로 낮고, 이동 기반 점수가 높은 행정동입니다.\n\n"
+        "2030 1인가구 거주 밀집 신호가 상대적으로 낮고, 이동 신호와 상권 검증 신호를 함께 볼 때 우선 검토할 행정동입니다.\n\n"
         f"{dataframe_to_markdown(visitor[cols])}\n"
     )
     mixed_report = (
@@ -2248,7 +2035,8 @@ def write_split_candidate_reports(dest: pd.DataFrame) -> None:
         "서교동, 신촌동, 역삼1동처럼 상권성과 거주성이 공존하는 지역이 포함됩니다.\n\n"
         "`adjusted_mobility_score`는 거주성 감점 후에도 전체 중앙값 이상을 유지했으므로 "
         "방문 신호 자체가 강하다고 볼 수 있지만, 거주지 이동이 점수를 끌어올리는 부분도 공존합니다. "
-        "소비 데이터·점포 밀도·요일별 패턴 등 추가 정보로 성격을 분리해야 합니다.\n\n"
+        "소비 데이터·점포 밀도·요일별 패턴 등 추가 정보로 성격을 분리해야 합니다. "
+        "`enrichment_status`에 미반영 항목이 있으면 최종 후보 점수보다 이동 신호 중심으로 해석하세요.\n\n"
         f"{dataframe_to_markdown(mixed[cols])}\n"
     )
     residential_report = (
@@ -2387,6 +2175,12 @@ def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame
     type_counts.columns = ["candidate_type", "dong_count"]
     residential_counts = dest["residential_filter"].value_counts().reset_index()
     residential_counts.columns = ["residential_filter", "dong_count"]
+    enrichment_counts = (
+        dest.get("enrichment_status", pd.Series(["상태 미기록"] * len(dest)))
+        .value_counts()
+        .reset_index()
+    )
+    enrichment_counts.columns = ["enrichment_status", "dong_count"]
 
     report = (
         "# 2030 이동 기반 상권 후보 해석 보고서\n\n"
@@ -2394,7 +2188,16 @@ def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame
         "현재 결과는 이동데이터를 선행 신호로 활용해 다음 유망 상권 후보를 발굴하는 분석입니다. "
         "2030 도착 이동이 강하게 나타나는 행정동을 먼저 찾고, 서울 시민생활 데이터의 "
         "2030 1인가구 지표를 결합해 자취/거주성으로 설명되는 이동과 방문 목적성이 남는 이동을 분리했습니다. "
-        "매출·용도지역·생활인구는 이동 신호를 부정하기 위한 조건이 아니라 후보 우선순위의 신뢰도를 높이는 보조 근거입니다.\n\n"
+        "매출·생활인구는 이동 신호를 부정하기 위한 조건이 아니라 후보 우선순위의 신뢰도를 높이는 보조 근거입니다.\n\n"
+        "## 점수 구조\n\n"
+        "이동 상권 분석은 세 단계 점수로 해석합니다.\n\n"
+        "- `mobility_signal_score`: 2030 이동 신호에서 자취·거주성 효과를 감점한 선행 신호\n"
+        "- `commercial_validation_score`: 매출, 생활인구, 방문패턴으로 계산한 상권 검증 신호\n"
+        "- `final_candidate_score`: 두 점수를 합친 최종 후보 우선순위\n\n"
+        "`enrichment_status`에 미반영 항목이 있으면 `final_candidate_score`가 이동 신호 중심으로 계산된 상태입니다. "
+        "그 경우 순위는 초기 후보 발굴용으로 보고, 매출·생활인구를 채운 뒤 재실행해야 상권 검증 점수로 해석할 수 있습니다.\n\n"
+        "## 보조 데이터 결합 상태\n\n"
+        f"{dataframe_to_markdown(enrichment_counts)}\n\n"
         "## 2030 자취/거주성 분리 결과\n\n"
         f"{dataframe_to_markdown(residential_counts)}\n\n"
         "- `2030 자취/거주성 높음`: 2030 1인가구수, 1인가구 비율, 외출 적은 집단 비중이 높은 지역입니다.\n"
@@ -2430,14 +2233,11 @@ def write_interpretation_report(dest: pd.DataFrame, subway_station: pd.DataFrame
         "화요일이면 과소 추정될 수 있습니다. "
         "`snapshot_weekday`, `is_weekend_snapshot` 컬럼이 이를 표시하므로 "
         "월간 비교 시 참고하세요. 전체 일별 월간 합계가 아니라는 점도 유의해야 합니다.\n\n"
-        "**2. 지하철/버스 — 행정동 공간 결합**\n\n"
-        "기본 지하철·버스 데이터에는 역명·정류장명만 있고 좌표가 없습니다. "
-        "`seoul_admin_dong_boundary.zip`과 좌표 파일(`subway_station_coordinates.csv`, "
-        "`bus_stop_coordinates.csv`)이 있으면 공간 조인으로 `transport_access_by_dong.csv`를 생성합니다. "
-        "좌표 파일은 다운로드 원천이 문서화되지 않아 기본 필수 입력에서 제외했고, "
-        "출처가 확인된 파일을 별도로 준비한 경우에만 보조 산출물을 생성합니다.\n\n"
+        "**2. 지하철/버스 — 보조 해석 자료**\n\n"
+        "기본 지하철·버스 데이터는 역명·정류장 단위 집계로만 사용합니다. "
+        "좌표와 행정동 경계가 필요한 공간 결합은 현재 분석 컨셉에서 제외했습니다.\n\n"
         "**3. 매출 결합 이후 후보 우선순위 고도화**\n\n"
-        "현재 분석은 행정동별 추정매출을 결합해 `commercial_potential_score`를 계산합니다. "
+        "현재 분석은 행정동별 추정매출을 결합해 `commercial_validation_score`와 `final_candidate_score`를 계산합니다. "
         "다만 업종별 점포 수, 신규/폐업, 임대료, 카드 매출의 세부 업종 같은 데이터는 아직 결합하지 않았습니다. "
         "다음 단계에서는 이동 신호와 추정매출 사이의 갭, 점포 밀도, 업종 적합성을 결합해 "
         "유망 후보의 업종별 적합도와 실행 우선순위를 더 정교하게 나눕니다.\n\n"
@@ -2498,15 +2298,13 @@ def run_all() -> None:
           f"복합형: {visit_pattern_counts.get('복합형', 0)}, "
           f"불명확: {visit_pattern_counts.get('불명확', 0)}")
 
-    print("3-3. Loading required enrichment data (GIS / sales / population)...")
-    land_use_df = summarize_land_use_by_dong()
+    print("3-3. Loading required enrichment data (sales / population)...")
     sales_df = summarize_sales_by_dong()
     pop_ratio_df = summarize_population_ratio()
 
-    print("3-4. Computing commercial_potential_score...")
+    print("3-4. Computing mobility/commercial/final candidate scores...")
     dest = add_commercial_potential_score(
         dest,
-        land_use_df if not land_use_df.empty else None,
         sales_df if not sales_df.empty else None,
         pop_ratio_df if not pop_ratio_df.empty else None,
     )
@@ -2518,10 +2316,6 @@ def run_all() -> None:
     bjdong_summary.to_csv(bjdong_path, index=False, encoding="utf-8-sig")
     print(f"   saved: {bjdong_path} ({len(bjdong_summary):,} 법정동)")
 
-    if not land_use_df.empty:
-        lu_path = PROCESSED_DIR / "land_use_by_dong.csv"
-        land_use_df.to_csv(lu_path, index=False, encoding="utf-8-sig")
-        print(f"   saved: {lu_path} ({len(land_use_df):,} rows)")
     if not sales_df.empty:
         sl_path = PROCESSED_DIR / "sales_by_dong.csv"
         sales_df.to_csv(sl_path, index=False, encoding="utf-8-sig")
@@ -2557,23 +2351,25 @@ def run_all() -> None:
     bjdong_report_cols = [
         c for c in [
             "bjdong_nm", "d_gu_name", "visit_pattern_type", "residential_filter", "candidate_type",
-            "commercial_potential_score", "adjusted_mobility_score", "cnt_2030",
+            "final_candidate_score", "mobility_signal_score", "commercial_validation_score",
+            "adjusted_mobility_score", "cnt_2030", "enrichment_status",
             "weekend_2030_ratio", "evening_2030_ratio", "late_night_2030_ratio",
-            "food_sales_ratio", "daytime_influx_ratio", "commercial_zone_ratio",
+            "food_sales_ratio", "daytime_influx_ratio",
         ]
         if c in bjdong_summary.columns
     ]
     bjdong_report = (
         "# 법정동(洞) 단위 상권 잠재력 Top 20 / Bottom 5\n\n"
         "행정동 단위 분석 결과를 법정동 단위로 집계하고, "
-        "용도지역·매출·유동인구·방문패턴을 결합한 `commercial_potential_score` 기준 순위입니다. "
-        "GIS·매출·생활인구 데이터를 모두 결합한 `commercial_potential_score` 기준 순위입니다.\n\n"
+        "이동 신호(`mobility_signal_score`)와 상권 검증 신호(`commercial_validation_score`)를 합친 "
+        "`final_candidate_score` 기준 순위입니다. `enrichment_status`에 미반영 항목이 있으면 "
+        "해당 결과는 상권 검증 전의 이동 기반 후보로 해석하세요.\n\n"
         "## 상위 20\n\n"
         f"{dataframe_to_markdown(bjdong_summary.head(20)[bjdong_report_cols])}\n"
         "\n## 하위 5\n\n"
         "같은 법정동 집계 안에서 복합 점수가 낮은 비교군입니다. 적극 후보라기보다 "
         "우선순위 조정과 제외 판단에 참고합니다.\n\n"
-        f"{dataframe_to_markdown(bjdong_summary.tail(5).sort_values('commercial_potential_score' if 'commercial_potential_score' in bjdong_summary.columns else 'adjusted_mobility_score')[bjdong_report_cols])}\n"
+        f"{dataframe_to_markdown(bjdong_summary.tail(5).sort_values('final_candidate_score' if 'final_candidate_score' in bjdong_summary.columns else 'adjusted_mobility_score')[bjdong_report_cols])}\n"
     )
     (REPORTS_DIR / "bjdong_commercial_candidate_top20.md").write_text(bjdong_report, encoding="utf-8")
 
@@ -2641,11 +2437,6 @@ def run_all() -> None:
     subway_station.to_csv(subway_station_path, index=False, encoding="utf-8-sig")
     bus_stop.to_csv(bus_stop_path, index=False, encoding="utf-8-sig")
     bus_hour.to_csv(bus_hour_path, index=False, encoding="utf-8-sig")
-    transport_access = summarize_transport_access_by_dong(subway_station, bus_stop)
-    if not transport_access.empty:
-        transport_access_path = PROCESSED_DIR / "transport_access_by_dong.csv"
-        transport_access.to_csv(transport_access_path, index=False, encoding="utf-8-sig")
-        print(f"   saved: {transport_access_path} ({len(transport_access):,} rows)")
     write_interpretation_report(dest, subway_station, bus_stop)
     print(f"   saved: {subway_station_path} ({len(subway_station):,} rows)")
     print(f"   saved: {bus_stop_path} ({len(bus_stop):,} rows)")

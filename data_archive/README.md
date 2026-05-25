@@ -20,11 +20,9 @@
 | `raw/seoul_purpose_admdong1_in_YYYYMM.zip` | 수도권 생활이동 성·연령별 도착지 기준 월별 파일, 연령대별 도착지 분석용 |
 | `raw/seoul_admin_dong_area.zip` | 서울시 상권분석서비스 영역-행정동, 행정동 코드 매핑용 |
 | `raw/seoul_living_interest_groups_202512.xlsx` | 서울 시민생활 데이터 행정동단위 10개 관심집단수, 2030 자취/거주성 보정용 |
-| `raw/seoul_admin_dong_boundary.zip` | 필수 파일. 행정동 경계 공간 결합용 |
 | `raw/seoul_commercial_sales_latest.csv` | 필수 파일. 행정동별 추정매출 |
 | `raw/seoul_living_population_latest.csv` | 필수 파일. 행정동별 시간대별 생활인구 |
-| `raw/seoul_land_use_zone.zip` | 필수 파일. 도시계획 용도지역지구도, 행정동별 용도지역 비율 계산용 |
-| `metadata/bjdong_admdong_mapping.csv` | 필수 파일. 행정동-법정동 공식 매핑 |
+| `metadata/bjdong_admdong_mapping.csv` | 선택 파일. 행정동-법정동 공식 매핑. 없으면 행정동명 기반 근사 집계 |
 
 ## Metadata Files
 
@@ -45,11 +43,9 @@
 - 행정동단위 10개 관심집단수: https://data.seoul.go.kr/dataList/OA-22266/F/1/datasetView.do
 - 행정동별 추정매출: https://data.seoul.go.kr/dataList/OA-22175/A/1/datasetView.do
 - 서울 생활인구: https://data.seoul.go.kr/dataList/OA-14991/A/1/datasetView.do
-- 행정동 경계: https://data.seoul.go.kr/dataList/OA-11677/S/1/datasetView.do 또는 NSDI/SGIS
-- 도시계획 용도지역지구도: 국토교통부 VWORLD, 서울시 도시공간정보서비스, 국가공간정보포털
-- 행정동-법정동 코드 매핑: 행정안전부 행정동 코드, 통계청 법정동 코드, data.go.kr, SGIS
+- 행정동-법정동 코드 매핑: 선택 입력. 없으면 행정동명 기반 근사 집계
 
-`raw/subway_station_coordinates.csv`, `raw/bus_stop_coordinates.csv`는 다운로드 원천이 문서화되지 않아 기본 필수 입력에서 제외했습니다. 출처가 확인된 좌표 파일을 별도로 준비한 경우에만 행정동별 교통 접근성 보조 산출물 생성에 사용합니다.
+행정동 경계, 도시계획 용도지역지구도, 역·정류장 좌표처럼 다운로드 원천과 재현성이 불안정한 공간 데이터는 기본 분석에서 제외했습니다.
 
 ## Scripts
 
@@ -62,8 +58,7 @@
 | `scripts/download_living_migration_daily_range.sh` | 날짜 범위 기준으로 생활이동 일별 ZIP 다운로드. 월 전체 집계 커버리지 확대용 |
 | `scripts/download_commercial_sales.sh` | 서울시 상권분석서비스 행정동별 추정매출 최신 분기 다운로드 (OA-22175) |
 | `scripts/download_living_population.sh` | 서울 생활인구 행정동별 시간대별 최신 월 다운로드 (OA-14991) |
-| `scripts/download_bjdong_mapping.sh` | 행정동 → 법정동 코드 매핑 파일 준비 안내 |
-| `scripts/download_gis_data.sh` | 서울시 행정동 경계·용도지역 shapefile 다운로드 안내 (geopandas 필요) |
+| `scripts/download_bjdong_mapping.sh` | 선택 입력인 행정동 → 법정동 코드 매핑 파일 준비 안내 |
 
 ## Secret Handling
 

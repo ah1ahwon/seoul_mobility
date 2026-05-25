@@ -24,6 +24,21 @@ START_DATE="${START_DATE:-2023-01-01}"
 END_DATE="${END_DATE:-2026-03-31}"
 DRY_RUN="${DRY_RUN:-0}"
 
+is_valid_zip() {
+  python3 - "$1" <<'PY'
+import sys
+import zipfile
+path = sys.argv[1]
+try:
+    with zipfile.ZipFile(path) as zf:
+        bad = zf.testzip()
+except zipfile.BadZipFile:
+    raise SystemExit(1)
+if bad:
+    raise SystemExit(1)
+PY
+}
+
 dates="$(
   START_DATE="$START_DATE" END_DATE="$END_DATE" python3 - <<'PY'
 import os
@@ -50,8 +65,12 @@ for ymd in $dates; do
   output="$BASE_DIR/raw/$filename"
 
   if [ -s "$output" ]; then
-    echo "skip existing: $filename"
-    continue
+    if is_valid_zip "$output"; then
+      echo "skip existing valid ZIP: $filename"
+      continue
+    fi
+    echo "remove corrupt ZIP and re-download: $filename"
+    rm -f "$output"
   fi
 
   if [ "$DRY_RUN" = "1" ]; then
@@ -66,17 +85,7 @@ for ymd in $dates; do
     continue
   fi
 
-  if ! python3 - "$output" <<'PY'
-import sys
-import zipfile
-path = sys.argv[1]
-try:
-    with zipfile.ZipFile(path):
-        pass
-except zipfile.BadZipFile:
-    raise SystemExit(1)
-PY
-  then
+  if ! is_valid_zip "$output"; then
     echo "warning: invalid ZIP returned; removing: $filename"
     rm -f "$output"
   fi

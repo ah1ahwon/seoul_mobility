@@ -11,7 +11,9 @@
 | 핵심 타깃 | 20대+30대 이동 및 유입 |
 | 상세 분석 기준 월 | 2026년 3월 생활이동 일별 파일 30개 |
 | 장기 추세 | 2023년 1월~2026년 3월 월말 스냅샷 |
-| 최종 후보 점수 | `commercial_potential_score` |
+| 이동 신호 점수 | `mobility_signal_score` |
+| 상권 검증 점수 | `commercial_validation_score` |
+| 최종 후보 점수 | `final_candidate_score` (`commercial_potential_score`는 호환용 별칭) |
 | 주요 보정 점수 | `adjusted_mobility_score`, `residential_dominance_score` |
 
 ## 2. 수도권 생활이동 OD 데이터
@@ -98,6 +100,12 @@ adjusted_mobility_score =
 - 0.7 * residential_penalty
 ```
 
+이동 상권 분석에서는 이 값을 그대로 `mobility_signal_score`로 사용한다.
+
+```text
+mobility_signal_score = adjusted_mobility_score
+```
+
 해석 기준:
 
 - 2030 1인가구 수와 비율이 높으면 자취·원룸·대학가 효과일 가능성이 크다.
@@ -152,13 +160,13 @@ sales_per_store = total_sales / total_stores
 food_sales_ratio = food_sales / total_sales
 ```
 
-최종 점수 반영:
+상권 검증 점수 반영:
 
 ```text
 + 0.7 * z(log1p(total_sales))
 ```
 
-현재 `sales_per_store`, `food_sales_ratio`는 결과 해석과 법정동 리포트에 포함되지만, 최종 점수식에는 `total_sales`만 직접 반영된다.
+현재 `sales_per_store`, `food_sales_ratio`는 결과 해석과 법정동 리포트에 포함되지만, `commercial_validation_score`에는 `total_sales`만 직접 반영된다.
 
 ## 6. 서울 생활인구
 
@@ -190,7 +198,7 @@ daytime_influx_ratio =
   daytime_pop_2030 / nighttime_pop_2030
 ```
 
-최종 점수 반영:
+상권 검증 점수 반영:
 
 ```text
 + 0.4 * z(daytime_influx_ratio)
@@ -201,36 +209,21 @@ daytime_influx_ratio =
 - `daytime_influx_ratio > 1`이면 심야 상주성보다 낮 유입이 강한 지역으로 본다.
 - 방문·업무·소비 목적의 외부 유입 가능성을 보정하는 지표다.
 
-## 7. 용도지역 + 행정동 경계 GIS
+## 7. 최종 이동 상권 후보 점수
 
-| 항목 | 내용 |
-|---|---|
-| 파일 | `data_archive/raw/seoul_land_use_zone.zip`, `data_archive/raw/seoul_admin_dong_boundary.zip` |
-| 출처 | 용도지역: VWORLD/서울시 도시공간정보서비스/NSDI, 행정동 경계: NSDI/SGIS/OA-11677 |
-| 분석 역할 | 상업지역·주거지역 등 공간적 상권 적합성 반영 |
-
-| 원천 컬럼/요소 | 사용 방식 | 생성 지표 |
-|---|---|---|
-| 행정동 경계 geometry | 용도지역 geometry와 공간 교차 | 행정동별 용도지역 면적 |
-| 행정동 코드 컬럼 | `adm`, `emd`, `dong_cd`, `hjdong` 포함 컬럼 자동 탐지 | `d_admdong_cd` |
-| 용도지역명 컬럼 | `용도`, `UNAME`, `zone` 포함 컬럼 자동 탐지 | `zone_type` |
-| 용도지역명에 `상업` 포함 | 상업지역으로 분류 | `commercial_zone_ratio` |
-| 용도지역명에 `주거` 포함 | 주거지역으로 분류 | `residential_zone_ratio` |
-| 용도지역명에 `준주거` 포함 | 준주거지역으로 분류 | `semi_residential_zone_ratio` |
-| 용도지역명에 `공업` 또는 `준공업` 포함 | 공업지역으로 분류 | `industrial_zone_ratio` |
-| 용도지역명에 `녹지` 포함 | 녹지지역으로 분류 | `green_zone_ratio` |
-
-최종 점수 반영:
+매출, 생활인구, 방문패턴은 이동 신호가 실제 상권성으로 해석될 수 있는지 확인하는 보조 검증 레이어다. 용도지역·행정동 경계 같은 GIS 데이터는 재현 가능한 자동 다운로드가 어렵기 때문에 기본 분석에서 제외한다.
 
 ```text
-+ 0.5 * z(commercial_zone_ratio)
-- 0.3 * z(residential_zone_ratio)
+commercial_validation_score =
+  0.7 * z(log1p(total_sales))
++ 0.4 * z(daytime_influx_ratio)
++ visit_bonus
+
+final_candidate_score =
+  mobility_signal_score + commercial_validation_score
 ```
 
-해석 기준:
-
-- 상업지역 비율이 높으면 실제 상권 입지 가능성을 가산한다.
-- 순수 주거지역 비율이 높으면 상권 후보 적합성을 일부 감점한다.
+`visit_bonus`는 목적 방문형 +0.5, 복합형 +0.2, 그 외 0.0이다. 결과 CSV에는 `enrichment_status`와 `missing_enrichment_count`를 함께 저장한다. `enrichment_status`에 미반영 항목이 있으면 `final_candidate_score`는 상권 검증이 덜 된 이동 기반 후보 점수로 해석한다.
 
 ## 8. 지하철 승하차
 
@@ -259,7 +252,7 @@ subway_weekend_share = weekend total_count / total_count
 주의:
 
 - 기본 지하철 데이터에는 행정동 좌표가 없어 행정동 후보 점수에 직접 연결하지 않는다.
-- 출처가 확인된 역 좌표 파일이 별도로 있으면 선택적으로 `transport_access_by_dong.csv` 생성에 사용한다.
+- 역 좌표와 행정동 경계가 필요한 공간 결합은 기본 분석에서 제외한다.
 
 ## 9. 버스 승하차
 
@@ -291,7 +284,7 @@ route_count = 정류장별 노선 수
 주의:
 
 - `output/processed/bus_stop_route_hourly.csv`는 100MB를 초과해 GitHub에는 올리지 않고 로컬 재생성 대상으로 둔다.
-- 출처가 확인된 정류장 좌표 파일이 별도로 있으면 선택적으로 `transport_access_by_dong.csv` 생성에 사용한다.
+- 정류장 좌표와 행정동 경계가 필요한 공간 결합은 기본 분석에서 제외한다.
 
 ## 10. 수도권 생활이동 성·연령별 도착지 데이터
 
@@ -340,7 +333,7 @@ age_mobility_score =
 | 항목 | 내용 |
 |---|---|
 | 파일 | `data_archive/metadata/bjdong_admdong_mapping.csv` |
-| 출처 | 행정안전부/통계청/data.go.kr/SGIS에서 준비 |
+| 출처 | 선택 입력. 행정안전부/통계청/data.go.kr 등에서 준비 |
 | 분석 역할 | 행정동 결과를 법정동 단위로 재집계 |
 
 | 컬럼 | 사용 방식 |
@@ -355,37 +348,36 @@ age_mobility_score =
 |---|---|
 | `*_cnt`, `total_cnt` | 합산 |
 | `*_score`, `*_ratio`, `avg_*` | 평균 |
-| `candidate_type`, `visit_pattern_type`, `residential_filter` | 최빈값 |
+| `candidate_type`, `visit_pattern_type`, `residential_filter`, `enrichment_status` | 최빈값 |
 
 ## 12. 최종 후보 점수에 직접 들어가는 지표
 
 ```text
-commercial_potential_score =
+mobility_signal_score =
   adjusted_mobility_score
-+ 0.5 * z(commercial_zone_ratio)
+
+commercial_validation_score =
 + 0.7 * z(log1p(total_sales))
 + 0.4 * z(daytime_influx_ratio)
 + visit_bonus
-- 0.3 * z(residential_zone_ratio)
+
+final_candidate_score =
+  mobility_signal_score + commercial_validation_score
 ```
 
 | 구성 요소 | 원천 데이터 | 의미 |
 |---|---|---|
-| `adjusted_mobility_score` | 생활이동 OD + 시민생활 관심집단 | 2030 이동 신호에서 자취/거주성 효과를 감점한 방문성 점수 |
-| `commercial_zone_ratio` | 용도지역 GIS | 상업지역 입지 적합성 |
+| `mobility_signal_score` | 생활이동 OD + 시민생활 관심집단 | 2030 이동 신호에서 자취/거주성 효과를 감점한 방문성 점수 |
 | `total_sales` | 행정동별 추정매출 | 실제 소비 발생 규모 |
 | `daytime_influx_ratio` | 서울 생활인구 | 낮 유입이 심야 상주성보다 강한지 |
 | `visit_bonus` | 생활이동 시간대·요일 패턴 | 목적 방문형/복합형 패턴 가산 |
-| `residential_zone_ratio` | 용도지역 GIS | 순수 주거지역 비중 패널티 |
 
-이 점수는 정답 데이터로 학습한 모델이 아니라 후보 스크리닝용 휴리스틱 점수다. 각 가중치는 다음 기준으로 둔다.
+이 점수는 정답 데이터로 학습한 모델이 아니라 후보 스크리닝용 휴리스틱 점수다. `commercial_potential_score`는 기존 산출물 호환을 위해 `final_candidate_score`와 같은 값을 담는다. 각 가중치는 다음 기준으로 둔다.
 
 | 항목 | 기준 |
 |---|---|
 | `total_sales` 0.7 | 실제 소비 발생 규모라서 보조 지표 중 가장 강하게 반영 |
-| `commercial_zone_ratio` 0.5 | 상업지역 입지 적합성을 반영하되, 모든 상권이 상업지역에만 있는 것은 아니므로 중간 가중치 적용 |
 | `daytime_influx_ratio` 0.4 | 낮 유입은 방문·업무·통행이 섞인 보조 신호라 중간보다 약하게 적용 |
-| `residential_zone_ratio` -0.3 | 순수 주거지역 비율은 감점하지만 배후 수요 가능성도 있어 약한 패널티 적용 |
 | `목적 방문형` +0.5 | 주말과 저녁/심야 신호가 함께 강해 자발적 방문·소비 가능성이 높다고 판단 |
 | `복합형` +0.2 | 방문 신호가 있지만 평일 생활권·업무·거주 신호도 섞여 있어 약한 가산 적용 |
 
@@ -401,9 +393,10 @@ commercial_potential_score =
 ## 13. 최종 해석 순서
 
 1. `residential_filter`로 거주성 후보인지 먼저 분리한다.
-2. `commercial_potential_score`로 최종 상권 후보 우선순위를 본다.
-3. `adjusted_mobility_score`로 이동 신호 자체가 강한지 확인한다.
-4. `cnt_2030`, `share_2030`, `origin_diversity`로 규모·집중도·광역성을 확인한다.
-5. `evening_2030_ratio`, `weekend_2030_ratio`, `visit_pattern_type`으로 방문 성격을 확인한다.
-6. `young_single_ratio`, `residential_dominance_score`로 자취/거주성 해석 위험을 확인한다.
-7. `trend_candidate_score`, `score_slope`, `top20_visitor_months`로 장기 안정성과 상승/하락을 확인한다.
+2. `enrichment_status`로 매출·생활인구가 실제 결합됐는지 확인한다.
+3. `final_candidate_score`로 최종 상권 후보 우선순위를 본다.
+4. `mobility_signal_score`로 이동 신호 자체가 강한지 확인한다.
+5. `cnt_2030`, `share_2030`, `origin_diversity`로 규모·집중도·광역성을 확인한다.
+6. `evening_2030_ratio`, `weekend_2030_ratio`, `visit_pattern_type`으로 방문 성격을 확인한다.
+7. `young_single_ratio`, `residential_dominance_score`로 자취/거주성 해석 위험을 확인한다.
+8. `trend_candidate_score`, `score_slope`, `top20_visitor_months`로 장기 안정성과 상승/하락을 확인한다.

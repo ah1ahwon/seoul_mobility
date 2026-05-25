@@ -75,13 +75,13 @@ CHART_DESCRIPTIONS = [
     ),
     (
         "09_commercial_potential_scatter.png",
-        "이동 보정 점수와 상권 잠재력 점수 산점도",
-        "`adjusted_mobility_score`를 x축, `commercial_potential_score`를 y축으로 놓은 산점도입니다. 이동 신호는 강하지만 상권 레이어가 약한 곳, 반대로 매출·용도지역·유동인구 보정으로 상권 잠재력이 올라간 곳을 구분합니다.",
+        "이동 신호 점수와 최종 후보 점수 산점도",
+        "`adjusted_mobility_score`를 x축, `final_candidate_score`를 y축으로 놓은 산점도입니다. 이동 신호는 강하지만 상권 검증 레이어가 약한 곳, 반대로 매출·생활인구 보정으로 우선순위가 올라간 곳을 구분합니다.",
     ),
     (
         "10_bjdong_top20.png",
         "법정동 상권 잠재력 Top 20",
-        "행정동 결과를 법정동 단위로 집계한 뒤 `commercial_potential_score` 기준 상위 20개를 보여주는 막대 그래프입니다. 실제 입지 검토에서 행정동보다 익숙한 법정동 단위로 후보를 비교하기 위한 자료입니다.",
+        "행정동 결과를 법정동 단위로 집계한 뒤 `final_candidate_score` 기준 상위 20개를 보여주는 막대 그래프입니다. 실제 입지 검토에서 행정동보다 익숙한 법정동 단위로 후보를 비교하기 위한 자료입니다.",
     ),
 ]
 
@@ -504,7 +504,9 @@ def chart_9(dest: pd.DataFrame, viz_dir: Path, run_id: str, show: bool) -> bool:
     title = "chart 9"
     if dest.empty or not ensure_columns(dest, ["adjusted_mobility_score"], title):
         return False
-    score_y = "commercial_potential_score" if "commercial_potential_score" in dest.columns else "adjusted_mobility_score"
+    score_y = "final_candidate_score" if "final_candidate_score" in dest.columns else (
+        "commercial_potential_score" if "commercial_potential_score" in dest.columns else "adjusted_mobility_score"
+    )
     data = numeric(dest, ["adjusted_mobility_score", score_y])
     plot_data = data[["adjusted_mobility_score", score_y]].replace([np.inf, -np.inf], np.nan).dropna()
     if plot_data.empty:
@@ -528,7 +530,7 @@ def chart_9(dest: pd.DataFrame, viz_dir: Path, run_id: str, show: bool) -> bool:
     plt.colorbar(sc, ax=ax, label=score_y)
     ax.set_xlabel("adjusted_mobility_score")
     ax.set_ylabel(score_y)
-    ax.set_title("이동 기반 점수 vs 상권 잠재력 복합 점수", fontsize=13, fontweight="bold")
+    ax.set_title("이동 신호 점수 vs 최종 상권 후보 점수", fontsize=13, fontweight="bold")
     plt.tight_layout()
     save(fig, chart_path(viz_dir, run_id, "09_commercial_potential_scatter.png"), show)
     return True
@@ -539,7 +541,9 @@ def chart_10(bjdong: pd.DataFrame, viz_dir: Path, run_id: str, show: bool) -> bo
     if bjdong.empty:
         print("[skip] chart 10 bjdong data empty")
         return False
-    score_col = "commercial_potential_score" if "commercial_potential_score" in bjdong.columns else "adjusted_mobility_score"
+    score_col = "final_candidate_score" if "final_candidate_score" in bjdong.columns else (
+        "commercial_potential_score" if "commercial_potential_score" in bjdong.columns else "adjusted_mobility_score"
+    )
     if score_col not in bjdong.columns:
         print("[skip] chart 10 no score column")
         return False
